@@ -115,8 +115,8 @@ func _end_match(alive_players: Array[PlayerController], reason: String) -> void:
 	if not alive_players.is_empty():
 		var p: PlayerController = alive_players[0]
 		winner_id = p.peer_id
-		winner_class = p.sync_character_class
-		var p_info: Dictionary = NetworkManager.players.get(winner_id, {})
+		var net_mgr = get_node_or_null("/root/NetworkManager")
+		var p_info: Dictionary = net_mgr.players.get(winner_id, {}) if net_mgr else {}
 		winner_name = p_info.get("name", "Player %d" % winner_id)
 	elif not player_stats.is_empty():
 		# Winner by highest damage
@@ -126,7 +126,8 @@ func _end_match(alive_players: Array[PlayerController], reason: String) -> void:
 			if d > max_dmg:
 				max_dmg = d
 				winner_id = p_id
-				var p_info: Dictionary = NetworkManager.players.get(winner_id, {})
+				var net_mgr = get_node_or_null("/root/NetworkManager")
+				var p_info: Dictionary = net_mgr.players.get(winner_id, {}) if net_mgr else {}
 				winner_name = p_info.get("name", "Player %d" % winner_id)
 				winner_class = p_info.get("character", "Knight")
 
@@ -147,7 +148,8 @@ func _init_player_stats() -> void:
 		for child in players_node.get_children():
 			if child is PlayerController:
 				var p_id: int = child.peer_id
-				var p_info: Dictionary = NetworkManager.players.get(p_id, {})
+				var net_mgr = get_node_or_null("/root/NetworkManager")
+				var p_info: Dictionary = net_mgr.players.get(p_id, {}) if net_mgr else {}
 				player_stats[p_id] = {
 					"name": p_info.get("name", "Player %d" % p_id),
 					"class": child.sync_character_class,

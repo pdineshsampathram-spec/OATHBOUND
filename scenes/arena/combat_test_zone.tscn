@@ -1,0 +1,159 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Material" path="res://assets/materials/mat_flagstone_floor.tres" id="1_mat_floor"]
+[ext_resource type="Material" path="res://assets/materials/mat_ground_dirt.tres" id="2_mat_dirt"]
+[ext_resource type="Material" path="res://assets/materials/mat_fortress_sandstone.tres" id="3_mat_wall"]
+[ext_resource type="Material" path="res://assets/materials/mat_fortress_rubble.tres" id="4_mat_rubble"]
+[ext_resource type="PackedScene" path="res://assets/environment/fortress/prop_iron_gate.glb" id="5_gate"]
+[ext_resource type="PackedScene" path="res://assets/environment/fortress/prop_stone_fire_pit.glb" id="6_brazier"]
+[ext_resource type="PackedScene" path="res://assets/environment/fortress/prop_mossy_rocks.glb" id="7_rocks"]
+[ext_resource type="PackedScene" path="res://assets/environment/fortress/prop_wooden_crate.glb" id="8_crate"]
+[ext_resource type="PackedScene" path="res://assets/environment/fortress/prop_oak_barrel.glb" id="9_barrel"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_combat"]
+sky_top_color = Color(0.24, 0.38, 0.58, 1)
+sky_horizon_color = Color(0.68, 0.60, 0.48, 1)
+ground_bottom_color = Color(0.12, 0.11, 0.10, 1)
+ground_horizon_color = Color(0.42, 0.38, 0.32, 1)
+
+[sub_resource type="Sky" id="Sky_combat"]
+sky_material = SubResource("ProceduralSkyMaterial_combat")
+
+[sub_resource type="Environment" id="Environment_combat"]
+background_mode = 2
+sky = SubResource("Sky_combat")
+ambient_light_source = 3
+ambient_light_color = Color(0.55, 0.52, 0.46, 1)
+ambient_light_energy = 0.80
+tonemap_mode = 3
+tonemap_exposure = 1.05
+tonemap_white = 5.0
+ssao_enabled = true
+ssao_radius = 1.4
+ssao_intensity = 1.8
+glow_enabled = true
+glow_intensity = 0.3
+glow_bloom = 0.05
+fog_enabled = true
+fog_light_color = Color(0.58, 0.52, 0.44, 1)
+fog_density = 0.005
+fog_sky_affect = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+material = ExtResource("1_mat_floor")
+size = Vector3(12, 0.4, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(12, 0.4, 12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dirt"]
+material = ExtResource("2_mat_dirt")
+size = Vector3(4.5, 0.04, 4.5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall"]
+material = ExtResource("3_mat_wall")
+size = Vector3(4, 4, 0.8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall"]
+size = Vector3(4, 4, 0.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rubble_wall"]
+material = ExtResource("4_mat_rubble")
+size = Vector3(4, 3, 0.8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_rubble_wall"]
+size = Vector3(4, 3, 0.8)
+
+[node name="CombatTestZone" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_combat")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.287, 0.41, 0, 0.819, 0.574, -0.5, -0.497, 0.709, 0, 15, 0)
+light_color = Color(1, 0.92, 0.82, 1)
+light_energy = 0.95
+shadow_enabled = true
+shadow_bias = 0.02
+directional_shadow_max_distance = 45.0
+
+[node name="MainFloor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="MainFloor"]
+mesh = SubResource("BoxMesh_floor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MainFloor"]
+shape = SubResource("BoxShape3D_floor")
+
+[node name="DirtPatch_NW" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.01, -2.5)
+mesh = SubResource("BoxMesh_dirt")
+
+[node name="DirtPatch_SE" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 2.8, 0.01, 2.2)
+mesh = SubResource("BoxMesh_dirt")
+
+[node name="PerimeterWalls" type="Node3D" parent="."]
+
+[node name="NorthWall_L" type="StaticBody3D" parent="PerimeterWalls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 2.0, -5.4)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PerimeterWalls/NorthWall_L"]
+mesh = SubResource("BoxMesh_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PerimeterWalls/NorthWall_L"]
+shape = SubResource("BoxShape3D_wall")
+
+[node name="NorthWall_R" type="StaticBody3D" parent="PerimeterWalls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 1.5, -5.4)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PerimeterWalls/NorthWall_R"]
+mesh = SubResource("BoxMesh_rubble_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PerimeterWalls/NorthWall_R"]
+shape = SubResource("BoxShape3D_rubble_wall")
+
+[node name="Gate" parent="PerimeterWalls" instance=ExtResource("5_gate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.4)
+
+[node name="WestWall" type="StaticBody3D" parent="PerimeterWalls"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -5.4, 2.0, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PerimeterWalls/WestWall"]
+mesh = SubResource("BoxMesh_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PerimeterWalls/WestWall"]
+shape = SubResource("BoxShape3D_wall")
+
+[node name="EastWall" type="StaticBody3D" parent="PerimeterWalls"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 5.4, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PerimeterWalls/EastWall"]
+mesh = SubResource("BoxMesh_rubble_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PerimeterWalls/EastWall"]
+shape = SubResource("BoxShape3D_rubble_wall")
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="FirePit" parent="Props" instance=ExtResource("6_brazier")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 0, -3.2)
+
+[node name="FireLight" type="OmniLight3D" parent="Props/FirePit"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+light_color = Color(1, 0.55, 0.15, 1)
+light_energy = 2.4
+omni_range = 6.5
+
+[node name="MossyRocks_01" parent="Props" instance=ExtResource("7_rocks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0, -4.0)
+
+[node name="MossyRocks_02" parent="Props" instance=ExtResource("7_rocks")]
+transform = Transform3D(0.707, 0, -0.707, 0, 1, 0, 0.707, 0, 0.707, -4.0, 0, 3.2)
+
+[node name="Crate_01" parent="Props" instance=ExtResource("8_crate")]
+transform = Transform3D(0.965, 0, 0.258, 0, 1, 0, -0.258, 0, 0.965, -4.2, 0, -2.0)
+
+[node name="Barrel_01" parent="Props" instance=ExtResource("9_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0, -3.2)

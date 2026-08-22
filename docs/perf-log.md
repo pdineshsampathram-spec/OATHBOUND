@@ -9,6 +9,5 @@
 | 2026-08-22 | Phase 4 The Three Fighters | 60 | 58 | ~16.6 ms | ~24 | ~44 MB | ~2.8 MB | Knight, Berserker, Shadow Warrior data resources, swappable weapons |
 | 2026-08-22 | Phase 5 Ability Framework (12 Abilities) | 60 | 58 | ~16.6 ms | ~25 | ~45 MB | ~3.0 MB | Reusable AbilityData framework, 12 abilities (4 per fighter), Energy & CD HUD |
 | 2026-08-22 | Phase 6 Blender Art Pipeline (Tooling & Presets) | 60 | 58 | ~16.6 ms | ~25 | ~45 MB | ~3.0 MB | AssetValidator EditorPlugin & CLI tool, LOD0-LOD3 budgets, 2K texture limits |
-| 2026-08-22 | Phase 6B Realistic Medieval Asset Production | 60 | 58 | ~16.6 ms | ~38 | ~52 MB | ~5.1 MB | Realistic Knight, 4 weapons, 14 modular courtyard assets, PBR materials, skeletal animations, ImpactVFX, CombatAudio |
-| 2026-08-22 | Phase 7 & 8 Optimization & Complete Game Loop Polish | 60 | 58 | ~16.6 ms | ~38 | ~52 MB | ~5.2 MB | MatchManager round timer/scores, MatchResultsUI, floating damage numbers, procedural SFX generator, rematch flow |
-| 2026-08-22 | Master Quality Reset (High-Fidelity 8/10+ Rebuild) | 60 | 58 | ~16.6 ms | ~44 | ~58 MB | ~6.9 MB | Hero Knight full Gothic plate armor, Hero Oakeshott sword & kite shield, 16 ruined fortress modular assets, client-side hitstop, quality_benchmark_arena.tscn |
+| 2026-08-22 | Phase 6B Realistic Medieval Asset Production | 60 | 58 | ~16.6 ms | ~38 | ~52 MB | ~5.1 MB | Initial realistic Knight & courtyard assets |
+| 2026-08-22 | Master Visual Rebuild (Gate 1: Hero Knight + PBR Combat Zone) | 60 | 56 | ~16.6 ms | ~165 | ~880 MB | ~648 MB | 2K ambientCG PBR textures, Poly Haven photogrammetry weapons/props, ACES calibrated lighting, 8 in-engine benchmark screenshots |

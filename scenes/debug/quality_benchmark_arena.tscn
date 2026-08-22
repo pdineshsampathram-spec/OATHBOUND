@@ -1,18 +1,18 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="PackedScene" path="res://scenes/arena/ruined_fortress_arena.tscn" id="1_arena"]
+[ext_resource type="PackedScene" path="res://scenes/arena/combat_test_zone.tscn" id="1_arena"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/test/test_dummy.tscn" id="3_dummy"]
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="4_hud"]
 
 [node name="QualityBenchmarkArena" type="Node3D"]
 
-[node name="RuinedFortressArena" parent="." instance=ExtResource("1_arena")]
+[node name="CombatTestZone" parent="." instance=ExtResource("1_arena")]
 
 [node name="HeroKnightPlayer" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.5)
 
 [node name="CombatTestDummy" parent="." instance=ExtResource("3_dummy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.5)
 
 [node name="CombatHUD" parent="." instance=ExtResource("4_hud")]

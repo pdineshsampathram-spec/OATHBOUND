@@ -170,7 +170,8 @@ func _update_network_status() -> void:
 		return
 	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		var role: String = "Host (Server)" if multiplayer.is_server() else "Client"
-		var count: int = NetworkManager.players.size()
+		var net_mgr = get_node_or_null("/root/NetworkManager")
+		var count: int = net_mgr.players.size() if net_mgr else 1
 		network_label.text = "Role: %s | Warriors: %d" % [role, count]
 	else:
 		network_label.text = "Mode: Solo Practice"

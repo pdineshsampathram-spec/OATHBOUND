@@ -4,7 +4,7 @@ extends StaticBody3D
 ## TestDummy — Combat target for testing light/heavy/charged attacks, poise stagger, knockdowns, and finishers.
 
 @onready var health_component: HealthComponent = $HealthComponent
-@onready var mesh_instance: MeshInstance3D = $MeshInstance3D
+@onready var mesh_instance: MeshInstance3D = $StrawTorso if has_node("StrawTorso") else get_node_or_null("MeshInstance3D")
 @onready var label_3d: Label3D = $Label3D
 
 var _respawn_timer: float = 0.0

@@ -72,6 +72,7 @@ func _on_rematch_pressed() -> void:
 func _on_lobby_pressed() -> void:
 	visible = false
 	return_to_lobby_requested.emit()
-	if NetworkManager:
-		NetworkManager.disconnect_game()
+	var net_mgr = get_node_or_null("/root/NetworkManager")
+	if net_mgr and net_mgr.has_method("disconnect_game"):
+		net_mgr.disconnect_game()
 	get_tree().change_scene_to_file("res://scenes/lobby.tscn")

@@ -2,14 +2,14 @@
 
 **Hard Limit:** 20 GB Max
 
-## Target Allocation
+## Target Allocation & Status
 | Category | Budget Target | Current Size | Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **Source / Project** | 2–3 GB | ~1.1 MB | Normal | GDScript, scenes, networking, UI, configs |
-| **Environment Assets** | 4–5 GB | ~1.2 MB | Normal | 16 High-fidelity fortress modular .glb assets & PBR materials |
-| **Characters & Animations** | 3–4 GB | ~1.6 MB | Normal | Hero Knight .glb + Hero weapons + 14 biomechanic animations |
-| **Textures & Materials** | 3–4 GB | ~0.1 MB | Normal | PBR materials embedded in .glb (2K max) |
-| **Audio & VFX** | 1–2 GB | ~0.1 MB | Normal | In-memory procedural SFX + GPUParticles3D |
-| **Cache & Builds** | 3–4 GB | ~2.9 MB | Normal | `.godot` cache |
+| **Source / Project** | 2–3 GB | ~2.5 MB | Normal | GDScript, scenes, networking, UI, configs, materials |
+| **Textures & Materials** | 3–4 GB | ~220 MB | Normal | 2K/1K PBR Maps (ambientCG CC0: Tiles130, Ground037, Bricks083, Rocks025, Wood066, Metal009, Leather026, Fabric048) |
+| **Environment Assets** | 4–5 GB | ~180 MB | Normal | Poly Haven CC0 photogrammetry models (large_iron_gate, mossy_rocks, fire_pit, crates, barrels) |
+| **Characters & Weapons** | 3–4 GB | ~45 MB | Normal | Hero Knight 2K PBR + Antique Estoc + Kite Shield |
+| **Audio & VFX** | 1–2 GB | ~0.1 MB | Normal | In-memory procedural SFX synthesizer + GPUParticles3D |
+| **Cache & Builds** | 3–4 GB | ~200 MB | Normal | `.godot` cache & imported texture streams |
 | **Safety Margin** | ~2 GB | N/A | Available | Buffer to prevent hitting storage ceiling |
-| **Total Project** | **20 GB Max** | **~6.9 MB** | **Healthy** | Monitored via `/perf-check` (0.034% of cap) |
+| **Total Project** | **20 GB Max** | **~648 MB** | **Healthy** | Monitored via `/perf-check` (3.24% of cap) |

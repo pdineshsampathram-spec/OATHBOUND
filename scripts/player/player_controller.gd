@@ -169,6 +169,27 @@ func _apply_character_data() -> void:
 	sync_poise = current_poise
 
 	_configure_visual_archetype()
+	_apply_hero_materials()
+
+func _apply_hero_materials() -> void:
+	if not knight_model:
+		return
+	var steel_mat: Material = preload("res://assets/materials/mat_knight_steel.tres")
+	var leather_mat: Material = preload("res://assets/materials/mat_knight_leather.tres")
+	var tabard_mat: Material = preload("res://assets/materials/mat_knight_tabard.tres")
+
+	for child in knight_model.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi and mi.mesh:
+			for s in range(mi.mesh.get_surface_count()):
+				var orig_mat: Material = mi.mesh.surface_get_material(s)
+				var m_name: String = orig_mat.resource_name if orig_mat else ""
+				if "Leather" in m_name:
+					mi.set_surface_override_material(s, leather_mat)
+				elif "Tabard" in m_name or "Cloth" in m_name or "Fabric" in m_name:
+					mi.set_surface_override_material(s, tabard_mat)
+				else:
+					mi.set_surface_override_material(s, steel_mat)
 
 func _configure_visual_archetype() -> void:
 	if not character_data or not visual_pivot:

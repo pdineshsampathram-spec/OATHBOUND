@@ -6,8 +6,8 @@ extends Node3D
 
 static func spawn_hit_sparks(parent: Node, global_pos: Vector3, is_heavy: bool = false) -> void:
 	if not parent: return
-
 	var particles: GPUParticles3D = GPUParticles3D.new()
+	parent.add_child(particles)
 	particles.top_level = true
 	particles.global_position = global_pos
 	particles.amount = 20 if is_heavy else 10
@@ -35,12 +35,12 @@ static func spawn_hit_sparks(parent: Node, global_pos: Vector3, is_heavy: bool =
 	draw_mesh.material = dmat
 	particles.draw_pass_1 = draw_mesh
 
-	parent.add_child(particles)
 	particles.emitting = true
 
 	# Auto free after emitting
-	var timer: SceneTreeTimer = parent.get_tree().create_timer(0.35)
-	timer.timeout.connect(particles.queue_free)
+	if parent.is_inside_tree():
+		var timer: SceneTreeTimer = parent.get_tree().create_timer(0.35)
+		timer.timeout.connect(particles.queue_free)
 
 static func spawn_parry_flash(parent: Node, global_pos: Vector3) -> void:
 	if not parent: return
