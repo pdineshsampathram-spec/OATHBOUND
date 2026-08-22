@@ -2,6 +2,7 @@ class_name StateMachine
 extends Node
 
 ## Reusable finite state machine managing combat and movement states.
+## Executes physics and process logic on the server/authority.
 
 signal state_changed(previous_state: String, current_state: String)
 
@@ -12,12 +13,10 @@ var states: Dictionary = {}
 var character: CharacterBody3D = null
 
 func _ready() -> void:
-	# Resolve parent character (e.g. PlayerController)
 	var parent_node: Node = get_parent()
 	if parent_node is CharacterBody3D:
 		character = parent_node
 
-	# Index all child State nodes
 	for child in get_children():
 		if child is State:
 			states[child.name.to_lower()] = child
@@ -25,7 +24,6 @@ func _ready() -> void:
 			child.state_machine = self
 			child.character = character
 
-	# Transition to initial state if assigned, or first child
 	await parent_node.ready
 	if initial_state:
 		transition_to(initial_state.name)
@@ -33,16 +31,21 @@ func _ready() -> void:
 		transition_to(get_child(0).name)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if current_state:
+	if _is_authority() and current_state:
 		current_state.handle_input(event)
 
 func _process(delta: float) -> void:
-	if current_state:
+	if _is_authority() and current_state:
 		current_state.process_state(delta)
 
 func _physics_process(delta: float) -> void:
-	if current_state:
+	if _is_authority() and current_state:
 		current_state.physics_process_state(delta)
+
+func _is_authority() -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	return multiplayer.is_server()
 
 func transition_to(target_state_name: String, msg: Dictionary = {}) -> void:
 	var target_key: String = target_state_name.to_lower()

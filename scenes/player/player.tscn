@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://c6r8q0u2v4w8m"]
+[gd_scene load_steps=21 format=3 uid="uid://c6r8q0u2v4w8m"]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_cam"]
@@ -12,6 +12,32 @@
 [ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="10_block"]
 [ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="11_dodge"]
 [ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="12_dead"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
+properties/0/path = NodePath(".:sync_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:sync_velocity")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:sync_rotation_y")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:sync_health")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath(".:sync_stamina")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath(".:sync_is_blocking")
+properties/5/spawn = true
+properties/5/replication_mode = 1
+properties/6/path = NodePath(".:sync_is_dead")
+properties/6/spawn = true
+properties/6/replication_mode = 1
+properties/7/path = NodePath(".:sync_state_name")
+properties/7/spawn = true
+properties/7/replication_mode = 1
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
@@ -52,6 +78,9 @@ size = Vector3(0.35, 1.1, 0.5)
 collision_layer = 2
 collision_mask = 3
 script = ExtResource("1_player")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)

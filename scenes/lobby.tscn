@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3 uid="uid://dp6r5m4q9v2k7"]
+
+[ext_resource type="PackedScene" uid="uid://b3k8v5m2p1q4x" path="res://scenes/ui/lobby_ui.tscn" id="1_lobby_ui"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LobbyUI" parent="." instance=ExtResource("1_lobby_ui")]
+layout_mode = 1
