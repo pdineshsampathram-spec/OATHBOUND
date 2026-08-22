@@ -1,0 +1,20 @@
+[gd_scene load_steps=6 format=3 uid="uid://cx6r7q8v2p4m1"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://b1d8j6k4v9x2m" path="res://scenes/arena/blockout_arena.tscn" id="2_arena"]
+[ext_resource type="PackedScene" uid="uid://c6r8q0u2v4w8m" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" uid="uid://cx4m8k3q2v1p7" path="res://scenes/test/test_dummy.tscn" id="4_dummy"]
+[ext_resource type="PackedScene" uid="uid://df7k2m5q8w1v9" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="BlockoutArena" parent="." instance=ExtResource("2_arena")]
+
+[node name="TestDummy" parent="." instance=ExtResource("4_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="CombatHUD" parent="." instance=ExtResource("5_hud")]

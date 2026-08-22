@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3 uid="uid://b8t4f6v9p3xq1"]
+
+[ext_resource type="Script" path="res://scripts/resources/character_data.gd" id="1_char"]
+
+[resource]
+script = ExtResource("1_char")
+character_name = "Knight"
+character_description = "Balanced warrior with longsword and shield."
+max_health = 100.0
+poise = 50.0
+max_stamina = 100.0
+stamina_regen_rate = 25.0
+stamina_regen_delay = 0.8
+sprint_stamina_drain = 18.0
+dodge_stamina_cost = 20.0
+attack_stamina_cost = 14.0
+block_stamina_drain_per_hit = 15.0
+move_speed = 5.5
+sprint_speed = 8.5
+acceleration = 12.0
+deceleration = 14.0
+rotation_speed = 12.0
+attack_damage = 18.0
+attack_duration = 0.55
+attack_hitbox_start = 0.15
+attack_hitbox_end = 0.35
+attack_forward_impulse = 2.5
+block_damage_reduction = 0.75
+block_move_speed_multiplier = 0.45
+dodge_speed = 11.0
+dodge_duration = 0.4
+dodge_iframe_start = 0.05
+dodge_iframe_end = 0.28

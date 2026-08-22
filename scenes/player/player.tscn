@@ -1,0 +1,127 @@
+[gd_scene load_steps=19 format=3 uid="uid://c6r8q0u2v4w8m"]
+
+[ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_cam"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="3_hp"]
+[ext_resource type="Script" path="res://scripts/combat/stamina_component.gd" id="4_stm"]
+[ext_resource type="Script" path="res://scripts/combat/state_machine.gd" id="5_sm"]
+[ext_resource type="Script" path="res://scripts/combat/states/idle_state.gd" id="6_idle"]
+[ext_resource type="Script" path="res://scripts/combat/states/movement_state.gd" id="7_move"]
+[ext_resource type="Script" path="res://scripts/combat/states/sprint_state.gd" id="8_sprint"]
+[ext_resource type="Script" path="res://scripts/combat/states/light_attack_state.gd" id="9_atk"]
+[ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="10_block"]
+[ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="11_dodge"]
+[ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="12_dead"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.22, 0.26, 0.32, 1)
+metallic = 0.4
+roughness = 0.5
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+material = SubResource("StandardMaterial3D_body")
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shield"]
+albedo_color = Color(0.18, 0.35, 0.55, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_shield"]
+material = SubResource("StandardMaterial3D_shield")
+size = Vector3(0.1, 0.6, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sword"]
+albedo_color = Color(0.85, 0.88, 0.92, 1)
+metallic = 0.9
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_sword"]
+material = SubResource("StandardMaterial3D_sword")
+size = Vector3(0.06, 0.9, 0.12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_sword"]
+size = Vector3(0.35, 1.1, 0.5)
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_player")
+
+[node name="VisualPivot" type="Node3D" parent="."]
+
+[node name="CharacterMesh" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="ShieldMesh" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.42, 1.0, -0.2)
+mesh = SubResource("BoxMesh_shield")
+
+[node name="SwordPivot" type="Node3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 1.0, 0)
+
+[node name="SwordMesh" type="MeshInstance3D" parent="VisualPivot/SwordPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.35, -0.25)
+mesh = SubResource("BoxMesh_sword")
+
+[node name="SwordHitbox" type="Area3D" parent="VisualPivot/SwordPivot"]
+collision_layer = 4
+collision_mask = 7
+monitoring = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualPivot/SwordPivot/SwordHitbox"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.35, -0.25)
+shape = SubResource("BoxShape3D_sword")
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("2_cam")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
+collision_mask = 1
+spring_length = 4.0
+margin = 0.2
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]
+current = true
+fov = 75.0
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("3_hp")
+
+[node name="StaminaComponent" type="Node" parent="."]
+script = ExtResource("4_stm")
+
+[node name="StateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+script = ExtResource("5_sm")
+initial_state = NodePath("IdleState")
+
+[node name="IdleState" type="Node" parent="StateMachine"]
+script = ExtResource("6_idle")
+
+[node name="MovementState" type="Node" parent="StateMachine"]
+script = ExtResource("7_move")
+
+[node name="SprintState" type="Node" parent="StateMachine"]
+script = ExtResource("8_sprint")
+
+[node name="LightAttackState" type="Node" parent="StateMachine"]
+script = ExtResource("9_atk")
+
+[node name="BlockState" type="Node" parent="StateMachine"]
+script = ExtResource("10_block")
+
+[node name="DodgeState" type="Node" parent="StateMachine"]
+script = ExtResource("11_dodge")
+
+[node name="DeadState" type="Node" parent="StateMachine"]
+script = ExtResource("12_dead")
