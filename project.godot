@@ -24,6 +24,10 @@ window/size/viewport_height=720
 window/size/resizable=true
 window/vsync/vsync_mode=1
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/asset_validator/plugin.cfg")
+
 [input]
 
 move_forward={

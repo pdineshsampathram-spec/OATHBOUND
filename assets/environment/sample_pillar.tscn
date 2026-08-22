@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3 uid="uid://cx4m8k1v9p2s3"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_pillar"]
+height = 6.0
+radius = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_stone"]
+albedo_color = Color(0.38, 0.4, 0.44, 1)
+roughness = 0.85
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pillar"]
+material = SubResource("StandardMaterial3D_stone")
+top_radius = 0.6
+bottom_radius = 0.6
+height = 6.0
+radial_segments = 16
+
+[sub_resource type="BoxMesh" id="BoxMesh_cap"]
+material = SubResource("StandardMaterial3D_stone")
+size = Vector3(1.5, 0.4, 1.5)
+
+[node name="SamplePillar" type="StaticBody3D"]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.0, 0)
+shape = SubResource("CylinderShape3D_pillar")
+
+[node name="PillarShaft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.0, 0)
+mesh = SubResource("CylinderMesh_pillar")
+
+[node name="PillarBase" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("BoxMesh_cap")
+
+[node name="PillarCapital" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8, 0)
+mesh = SubResource("BoxMesh_cap")
