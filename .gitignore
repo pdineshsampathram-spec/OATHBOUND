@@ -1,0 +1,26 @@
+# Godot 4+ specific ignores
+.godot/
+*.translation
+
+# Export artifacts
+/build/
+/exports/
+*.pck
+*.apk
+*.aab
+*.exe
+*.dmg
+*.app/
+*.ipa
+
+# Blender backups
+*.blend1
+*.blend2
+*.blend3
+*.blend4
+*.blend5
+*.blend@
+
+# OS specific
+.DS_Store
+Thumbs.db
