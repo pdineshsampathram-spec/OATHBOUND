@@ -17,6 +17,7 @@ const MAX_PLAYERS: int = 5
 var peer: ENetMultiplayerPeer = null
 var players: Dictionary = {} # peer_id -> {"name": String, "character": String}
 var local_player_name: String = "Warrior"
+var local_character_choice: String = "Knight"
 var is_match_running: bool = false
 
 func _ready() -> void:
@@ -39,7 +40,7 @@ func host_game(port: int = DEFAULT_PORT, max_clients: int = MAX_PLAYERS - 1) -> 
 	# Register host (peer ID 1)
 	players[1] = {
 		"name": local_player_name + " (Host)",
-		"character": "Knight"
+		"character": local_character_choice
 	}
 	
 	server_started.emit()
@@ -71,20 +72,9 @@ func disconnect_game() -> void:
 func _on_peer_connected(id: int) -> void:
 	player_connected.emit(id)
 	if multiplayer.is_server():
-		# Send registered players list to new peer
-		_register_player.rpc_id(id, 1, players[1]["name"])
+		# Send current players list to new peer
 		for existing_id in players.keys():
-			if existing_id != 1 and existing_id != id:
-				_register_player.rpc_id(id, existing_id, players[existing_id]["name"])
-
-		# Register this new player
-		var p_name: String = "Player " + str(id)
-		players[id] = {
-			"name": p_name,
-			"character": "Knight"
-		}
-		_register_player.rpc(id, p_name)
-		players_updated.emit()
+			_register_player.rpc_id(id, existing_id, players[existing_id]["name"], players[existing_id]["character"])
 
 func _on_peer_disconnected(id: int) -> void:
 	players.erase(id)
@@ -93,7 +83,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	var my_id: int = multiplayer.get_unique_id()
-	_register_player.rpc_id(1, my_id, local_player_name)
+	_register_player.rpc_id(1, my_id, local_player_name, local_character_choice)
 	connected_to_server.emit()
 	players_updated.emit()
 
@@ -109,11 +99,14 @@ func _on_server_disconnected() -> void:
 # --- RPCs for Lobby & Match Sync ---
 
 @rpc("any_peer", "call_local", "reliable")
-func _register_player(id: int, p_name: String) -> void:
+func _register_player(id: int, p_name: String, p_char: String) -> void:
 	players[id] = {
 		"name": p_name,
-		"character": "Knight"
+		"character": p_char
 	}
+	if multiplayer.is_server():
+		# Re-broadcast to all other peers
+		_register_player.rpc(id, p_name, p_char)
 	players_updated.emit()
 
 @rpc("authority", "call_local", "reliable")

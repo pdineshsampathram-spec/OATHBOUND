@@ -33,17 +33,17 @@ grow_vertical = 2
 color = Color(0.04, 0.05, 0.07, 1)
 
 [node name="Panel" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(520, 480)
+custom_minimum_size = Vector2(560, 540)
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -260.0
-offset_top = -240.0
-offset_right = 260.0
-offset_bottom = 240.0
+offset_left = -280.0
+offset_top = -270.0
+offset_right = 280.0
+offset_bottom = 270.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -51,13 +51,13 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 [node name="MarginContainer" type="MarginContainer" parent="Panel"]
 layout_mode = 2
 theme_override_constants/margin_left = 28
-theme_override_constants/margin_top = 24
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 28
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_bottom = 20
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -70,7 +70,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.65, 0.72, 1)
 theme_override_font_sizes/font_size = 12
-text = "Server-Authoritative Arena Matchmaking"
+text = "Fighter Selection & Arena Matchmaking"
 horizontal_alignment = 1
 
 [node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
@@ -88,8 +88,29 @@ text = "Name:"
 [node name="NameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/NameRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Knight_1"
+text = "Warrior_1"
 placeholder_text = "Enter warrior name..."
+
+[node name="CharRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CharLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/CharRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Class:"
+
+[node name="CharSelect" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/CharRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CharInfoLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.75, 0.5, 0.9)
+theme_override_font_sizes/font_size = 11
+text = "KNIGHT (The Sentinel): 120 HP | 65 Poise | Longsword & Shield | High Defense | Ability [Q]: Shield Rush"
+autowrap_mode = 2
 
 [node name="JoinRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -141,12 +162,12 @@ theme_override_font_sizes/font_size = 12
 text = "WARRIORS IN LOBBY (Max 5):"
 
 [node name="PlayerList" type="ItemList" parent="Panel/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 100)
+custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
 size_flags_vertical = 3
 
 [node name="StartButton" type="Button" parent="Panel/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 42)
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 14

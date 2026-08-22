@@ -18,25 +18,24 @@ func _ready() -> void:
 	if spawner:
 		spawner.spawn_function = _custom_spawn_player
 
-	# If server or offline, spawn all active players
 	if NetworkManager.is_server():
 		_spawn_all_connected_players()
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
-	# Connect local player to HUD once ready
 	_find_and_connect_local_player()
 
 func _spawn_all_connected_players() -> void:
 	var player_ids: Array = NetworkManager.players.keys()
 	if player_ids.is_empty():
-		# Offline fallback
 		player_ids = [1]
 
 	for i in range(player_ids.size()):
 		var p_id: int = player_ids[i]
-		_spawn_player_at_index(p_id, i)
+		var p_data: Dictionary = NetworkManager.players.get(p_id, {})
+		var c_class: String = p_data.get("character", "Knight")
+		_spawn_player_at_index(p_id, i, c_class)
 
-func _spawn_player_at_index(p_id: int, spawn_idx: int) -> void:
+func _spawn_player_at_index(p_id: int, spawn_idx: int, c_class: String) -> void:
 	if players_container.has_node(str(p_id)):
 		return
 
@@ -53,7 +52,22 @@ func _spawn_player_at_index(p_id: int, spawn_idx: int) -> void:
 	p_node.name = str(p_id)
 	p_node.position = spawn_pos
 	p_node.rotation.y = spawn_rot
+	p_node.sync_character_class = c_class
+	
+	# Load resource directly on server
+	var res: CharacterData = _get_character_resource(c_class)
+	p_node.character_data = res
+
 	players_container.add_child(p_node, true)
+
+func _get_character_resource(c_class: String) -> CharacterData:
+	match c_class.to_lower():
+		"berserker":
+			return preload("res://resources/characters/berserker.tres")
+		"shadow warrior", "shadow_warrior", "phantom":
+			return preload("res://resources/characters/shadow_warrior.tres")
+		_:
+			return preload("res://resources/characters/knight.tres")
 
 func _custom_spawn_player(data: Variant) -> Node:
 	var p_node: PlayerController = player_scene.instantiate() as PlayerController
@@ -61,6 +75,9 @@ func _custom_spawn_player(data: Variant) -> Node:
 		p_node.name = str(data.get("id", 1))
 		p_node.position = data.get("pos", Vector3.ZERO)
 		p_node.rotation.y = data.get("rot", 0.0)
+		var c_class: String = data.get("character", "Knight")
+		p_node.sync_character_class = c_class
+		p_node.character_data = _get_character_resource(c_class)
 	return p_node
 
 func _on_peer_disconnected(id: int) -> void:
@@ -70,7 +87,6 @@ func _on_peer_disconnected(id: int) -> void:
 			p_node.queue_free()
 
 func _find_and_connect_local_player() -> void:
-	# Wait for nodes to settle
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -85,5 +101,4 @@ func _find_and_connect_local_player() -> void:
 	if local_player and combat_hud:
 		combat_hud.connect_player(local_player)
 	elif not players_container.get_children().is_empty() and combat_hud:
-		# Fallback to first player
 		combat_hud.connect_player(players_container.get_child(0) as PlayerController)

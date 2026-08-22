@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3 uid="uid://c6r8q0u2v4w8m"]
+[gd_scene load_steps=34 format=3 uid="uid://c6r8q0u2v4w8m"]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_cam"]
@@ -49,6 +49,9 @@ properties/7/replication_mode = 1
 properties/8/path = NodePath(".:sync_state_name")
 properties/8/spawn = true
 properties/8/replication_mode = 1
+properties/9/path = NodePath(".:sync_character_class")
+properties/9/spawn = true
+properties/9/replication_mode = 2
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
@@ -82,8 +85,28 @@ roughness = 0.25
 material = SubResource("StandardMaterial3D_sword")
 size = Vector3(0.06, 0.9, 0.12)
 
+[sub_resource type="BoxMesh" id="BoxMesh_axe"]
+material = SubResource("StandardMaterial3D_sword")
+size = Vector3(0.12, 1.2, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dagger"]
+material = SubResource("StandardMaterial3D_sword")
+size = Vector3(0.04, 0.6, 0.08)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_sword"]
-size = Vector3(0.35, 1.1, 0.5)
+size = Vector3(0.4, 1.2, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shockwave"]
+transparency = 1
+albedo_color = Color(0.9, 0.4, 0.1, 0.6)
+emission_enabled = true
+emission = Color(0.9, 0.3, 0.1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_shockwave"]
+material = SubResource("StandardMaterial3D_shockwave")
+top_radius = 4.0
+bottom_radius = 4.0
+height = 0.1
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -107,12 +130,30 @@ mesh = SubResource("CapsuleMesh_body")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.42, 1.0, -0.2)
 mesh = SubResource("BoxMesh_shield")
 
+[node name="LeftHandPivot" type="Node3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.42, 1.0, 0)
+visible = false
+
+[node name="LeftDaggerMesh" type="MeshInstance3D" parent="VisualPivot/LeftHandPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.25, -0.2)
+mesh = SubResource("BoxMesh_dagger")
+
 [node name="SwordPivot" type="Node3D" parent="VisualPivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 1.0, 0)
 
 [node name="SwordMesh" type="MeshInstance3D" parent="VisualPivot/SwordPivot"]
 transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.35, -0.25)
 mesh = SubResource("BoxMesh_sword")
+
+[node name="AxeMesh" type="MeshInstance3D" parent="VisualPivot/SwordPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.45, -0.3)
+visible = false
+mesh = SubResource("BoxMesh_axe")
+
+[node name="DaggerMesh" type="MeshInstance3D" parent="VisualPivot/SwordPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.25, -0.2)
+visible = false
+mesh = SubResource("BoxMesh_dagger")
 
 [node name="SwordHitbox" type="Area3D" parent="VisualPivot/SwordPivot"]
 collision_layer = 4
@@ -122,6 +163,11 @@ monitoring = false
 [node name="CollisionShape3D" type="CollisionShape3D" parent="VisualPivot/SwordPivot/SwordHitbox"]
 transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.35, -0.25)
 shape = SubResource("BoxShape3D_sword")
+
+[node name="ShockwaveMesh" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+visible = false
+mesh = SubResource("CylinderMesh_shockwave")
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("2_cam")

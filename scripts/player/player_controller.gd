@@ -2,8 +2,8 @@ class_name PlayerController
 extends CharacterBody3D
 
 ## PlayerController — Server-authoritative multiplayer combat controller.
-## Server owns damage, hits, stamina, health, poise, parries, and combat state transitions.
-## Clients send input requests via RPCs and locally predict locomotion.
+## Server owns damage, hits, stamina, health, poise, parries, abilities, and combat state transitions.
+## Reuses identical controller logic across all 3 archetypes (Knight, Berserker, Shadow Warrior).
 
 enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 
@@ -11,10 +11,15 @@ enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 
 @onready var visual_pivot: Node3D = $VisualPivot
 @onready var character_mesh: MeshInstance3D = $VisualPivot/CharacterMesh
+@onready var shield_mesh: MeshInstance3D = $VisualPivot/ShieldMesh
+@onready var left_hand_pivot: Node3D = $VisualPivot/LeftHandPivot
 @onready var sword_pivot: Node3D = $VisualPivot/SwordPivot
+@onready var sword_mesh: MeshInstance3D = $VisualPivot/SwordPivot/SwordMesh
+@onready var axe_mesh: MeshInstance3D = $VisualPivot/SwordPivot/AxeMesh
+@onready var dagger_mesh: MeshInstance3D = $VisualPivot/SwordPivot/DaggerMesh
 @onready var sword_hitbox: Area3D = $VisualPivot/SwordPivot/SwordHitbox
 @onready var sword_collision: CollisionShape3D = $VisualPivot/SwordPivot/SwordHitbox/CollisionShape3D
-@onready var shield_mesh: MeshInstance3D = $VisualPivot/ShieldMesh
+@onready var shockwave_mesh: MeshInstance3D = $VisualPivot/ShockwaveMesh
 @onready var camera_rig: CameraRig = $CameraRig
 @onready var state_machine: StateMachine = $StateMachine
 @onready var health_component: HealthComponent = $HealthComponent
@@ -25,12 +30,13 @@ enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 @export var sync_position: Vector3 = Vector3.ZERO
 @export var sync_velocity: Vector3 = Vector3.ZERO
 @export var sync_rotation_y: float = 0.0
-@export var sync_health: float = 100.0
+@export var sync_health: float = 120.0
 @export var sync_stamina: float = 100.0
-@export var sync_poise: float = 50.0
+@export var sync_poise: float = 65.0
 @export var sync_is_blocking: bool = false
 @export var sync_is_dead: bool = false
 @export var sync_state_name: String = "IdleState"
+@export var sync_character_class: String = "Knight"
 
 var peer_id: int = 1
 var is_local_player: bool = true
@@ -43,9 +49,10 @@ var is_finisher_vulnerable: bool = false
 var is_parry_empowered: bool = false
 var block_active_duration: float = 999.0
 
-# Poise system
-var current_poise: float = 50.0
+# Poise & Ability system
+var current_poise: float = 65.0
 var _poise_regen_timer: float = 0.0
+var ability_cooldown_remaining: float = 0.0
 
 # Combat strike data
 var current_attack_type: AttackType = AttackType.LIGHT
@@ -74,6 +81,7 @@ var _reaction_tween: Tween = null
 var _charge_tween: Tween = null
 var _hit_targets_this_swing: Array[Node] = []
 var _last_synced_state: String = ""
+var _last_synced_class: String = ""
 
 func _enter_tree() -> void:
 	if name.is_valid_int():
@@ -82,7 +90,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	if not character_data:
-		character_data = preload("res://resources/characters/default_fighter.tres")
+		_load_character_by_name(sync_character_class)
 
 	var is_mp_active: bool = multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if is_mp_active:
@@ -95,22 +103,7 @@ func _ready() -> void:
 	if camera_rig:
 		camera_rig.setup_authority(is_local_player)
 
-	if health_component and character_data:
-		health_component.initialize(character_data.max_health)
-		health_component.died.connect(_on_death)
-		health_component.health_changed.connect(_on_health_changed)
-
-	if stamina_component and character_data:
-		stamina_component.initialize(
-			character_data.max_stamina,
-			character_data.stamina_regen_rate,
-			character_data.stamina_regen_delay
-		)
-		stamina_component.stamina_changed.connect(_on_stamina_changed)
-
-	if character_data:
-		current_poise = character_data.max_poise
-		sync_poise = current_poise
+	_apply_character_data()
 
 	if sword_hitbox:
 		sword_hitbox.monitoring = false
@@ -121,7 +114,86 @@ func _ready() -> void:
 	sync_position = global_position
 	sync_rotation_y = visual_pivot.rotation.y
 
+func set_character_data(data: CharacterData) -> void:
+	character_data = data
+	if character_data:
+		sync_character_class = character_data.character_name
+	_apply_character_data()
+
+func _load_character_by_name(c_name: String) -> void:
+	match c_name.to_lower():
+		"berserker":
+			character_data = preload("res://resources/characters/berserker.tres")
+		"shadow warrior", "shadow_warrior", "phantom":
+			character_data = preload("res://resources/characters/shadow_warrior.tres")
+		_:
+			character_data = preload("res://resources/characters/knight.tres")
+
+func _apply_character_data() -> void:
+	if not character_data:
+		return
+
+	sync_character_class = character_data.character_name
+
+	if health_component:
+		health_component.initialize(character_data.max_health)
+		health_component.died.connect(_on_death)
+		health_component.health_changed.connect(_on_health_changed)
+		sync_health = character_data.max_health
+
+	if stamina_component:
+		stamina_component.initialize(
+			character_data.max_stamina,
+			character_data.stamina_regen_rate,
+			character_data.stamina_regen_delay
+		)
+		stamina_component.stamina_changed.connect(_on_stamina_changed)
+		sync_stamina = character_data.max_stamina
+
+	current_poise = character_data.max_poise
+	sync_poise = current_poise
+
+	_configure_visual_archetype()
+
+func _configure_visual_archetype() -> void:
+	if not character_data or not visual_pivot:
+		return
+
+	# Material Colors
+	if character_mesh:
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
+		mat.albedo_color = character_data.primary_color
+		mat.metallic = 0.5
+		mat.roughness = 0.4
+		character_mesh.material_override = mat
+
+	# Weapon Style Switching
+	match character_data.weapon_style:
+		CharacterData.WeaponStyle.SWORD_SHIELD: # Knight
+			if shield_mesh: shield_mesh.visible = true
+			if left_hand_pivot: left_hand_pivot.visible = false
+			if sword_mesh: sword_mesh.visible = true
+			if axe_mesh: axe_mesh.visible = false
+			if dagger_mesh: dagger_mesh.visible = false
+
+		CharacterData.WeaponStyle.GREAT_AXE: # Berserker
+			if shield_mesh: shield_mesh.visible = false
+			if left_hand_pivot: left_hand_pivot.visible = false
+			if sword_mesh: sword_mesh.visible = false
+			if axe_mesh: axe_mesh.visible = true
+			if dagger_mesh: dagger_mesh.visible = false
+
+		CharacterData.WeaponStyle.DUAL_BLADES: # Shadow Warrior
+			if shield_mesh: shield_mesh.visible = false
+			if left_hand_pivot: left_hand_pivot.visible = true
+			if sword_mesh: sword_mesh.visible = false
+			if axe_mesh: axe_mesh.visible = false
+			if dagger_mesh: dagger_mesh.visible = true
+
 func _physics_process(delta: float) -> void:
+	if ability_cooldown_remaining > 0.0:
+		ability_cooldown_remaining = maxf(0.0, ability_cooldown_remaining - delta)
+
 	if is_server_authority:
 		_process_poise_regen(delta)
 
@@ -140,6 +212,11 @@ func _physics_process(delta: float) -> void:
 			global_position = global_position.lerp(sync_position, 18.0 * delta)
 			visual_pivot.rotation.y = lerp_angle(visual_pivot.rotation.y, sync_rotation_y, 18.0 * delta)
 
+		if sync_character_class != _last_synced_class:
+			_load_character_by_name(sync_character_class)
+			_apply_character_data()
+			_last_synced_class = sync_character_class
+
 		if sync_state_name != _last_synced_state:
 			_on_remote_state_changed(_last_synced_state, sync_state_name)
 			_last_synced_state = sync_state_name
@@ -149,7 +226,7 @@ func _physics_process(delta: float) -> void:
 			set_guard_visual(is_blocking)
 
 func _process_poise_regen(delta: float) -> void:
-	if current_poise < character_data.max_poise:
+	if character_data and current_poise < character_data.max_poise:
 		_poise_regen_timer += delta
 		if _poise_regen_timer >= character_data.poise_regen_delay:
 			current_poise = minf(character_data.max_poise, current_poise + character_data.poise_regen_rate * delta)
@@ -157,6 +234,12 @@ func _process_poise_regen(delta: float) -> void:
 func restore_full_poise() -> void:
 	if character_data:
 		current_poise = character_data.max_poise
+
+func start_ability_cooldown(cooldown: float) -> void:
+	ability_cooldown_remaining = cooldown
+
+func can_use_ability() -> bool:
+	return ability_cooldown_remaining <= 0.0 and stamina_component and character_data and stamina_component.has_enough(character_data.ability_stamina_cost)
 
 func _on_health_changed(curr: float, _max_hp: float) -> void:
 	sync_health = curr
@@ -185,18 +268,17 @@ func _send_client_inputs(delta: float) -> void:
 
 	rpc_id(1, "server_receive_movement", move_in, cam_dir, is_sprint)
 
-	# Attack holding & charging logic
 	if Input.is_action_just_pressed("attack"):
 		_local_attack_held = true
 		_local_attack_press_time = 0.0
 		rpc_id(1, "server_receive_attack_press", true)
 
-	if _local_attack_held:
+	if _local_attack_held and character_data:
 		_local_attack_press_time += delta
 		if _local_attack_press_time >= character_data.charged_attack_min_charge:
 			rpc_id(1, "server_receive_charged_attack")
 
-	if Input.is_action_just_released("attack"):
+	if Input.is_action_just_released("attack") and character_data:
 		_local_attack_held = false
 		rpc_id(1, "server_receive_attack_press", false)
 		if _local_attack_press_time < 0.25:
@@ -351,7 +433,7 @@ func wants_finisher() -> bool:
 	return res
 
 func wants_ability() -> bool:
-	if is_dead:
+	if is_dead or not can_use_ability():
 		return false
 	if is_local_player and is_server_authority:
 		return Input.is_action_just_pressed("ability")
@@ -502,9 +584,7 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 	if is_dead:
 		return 0.0
 
-	# 1. Check Parry Window
 	if is_blocking and block_active_duration <= character_data.parry_window:
-		# PARRY SUCCESS!
 		rpc("rpc_flash_parry")
 		if state_machine:
 			state_machine.transition_to("ParryState")
@@ -515,7 +595,6 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 	var final_damage: float = amount
 	_poise_regen_timer = 0.0
 
-	# 2. Check Standard Block
 	if is_blocking and character_data:
 		if stamina_component and stamina_component.has_enough(character_data.block_stamina_drain_per_hit):
 			stamina_component.consume(character_data.block_stamina_drain_per_hit)
@@ -523,7 +602,6 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 			current_poise -= poise_dmg * 0.3
 			rpc("rpc_flash_shield")
 		else:
-			# Guard break
 			if stamina_component:
 				stamina_component.consume(stamina_component.current_stamina)
 			current_poise = 0.0
@@ -537,7 +615,6 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 	if damage_dealt > 0.0:
 		rpc("rpc_flash_hit")
 
-	# 3. Check Poise Break -> Stagger or Knockdown
 	if not is_dead and state_machine:
 		if atk_type == AttackType.CHARGED_KNOCKDOWN:
 			state_machine.transition_to("KnockedDownState")
@@ -562,12 +639,19 @@ func play_attack_animation() -> void:
 		_attack_tween.kill()
 
 	_attack_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(65.0), 0.12)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(20.0), 0.12)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(-85.0), 0.18)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(-15.0), 0.18)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.25)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.25)
+	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(65.0), 0.1)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(20.0), 0.1)
+	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(-85.0), 0.15)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(-15.0), 0.15)
+	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.2)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.2)
+
+	# Left dagger swing for dual blades
+	if left_hand_pivot and left_hand_pivot.visible:
+		var l_tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		l_tween.tween_property(left_hand_pivot, "rotation:y", deg_to_rad(-65.0), 0.1)
+		l_tween.tween_property(left_hand_pivot, "rotation:y", deg_to_rad(75.0), 0.15)
+		l_tween.tween_property(left_hand_pivot, "rotation:y", 0.0, 0.2)
 
 func play_heavy_attack_animation() -> void:
 	if not sword_pivot:
@@ -576,13 +660,10 @@ func play_heavy_attack_animation() -> void:
 		_attack_tween.kill()
 
 	_attack_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	# High overhead raise
 	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-90.0), 0.28)
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(45.0), 0.28)
-	# Heavy slam downward
 	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(45.0), 0.22)
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(-60.0), 0.22)
-	# Recovery
 	_attack_tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.35)
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", 0.0, 0.35)
 
@@ -617,10 +698,14 @@ func stop_charge_visual() -> void:
 		visual_pivot.scale = Vector3.ONE
 
 func play_parry_success_animation() -> void:
-	if shield_mesh:
+	if shield_mesh and shield_mesh.visible:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tween.tween_property(shield_mesh, "position:z", -0.6, 0.1)
 		tween.tween_property(shield_mesh, "position:z", -0.2, 0.25)
+	elif sword_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-45.0), 0.1)
+		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.25)
 
 func play_dodge_animation() -> void:
 	if not visual_pivot:
@@ -633,12 +718,16 @@ func play_dodge_animation() -> void:
 	_dodge_tween.tween_callback(func(): visual_pivot.rotation.x = 0.0)
 
 func set_guard_visual(active: bool) -> void:
-	if shield_mesh:
+	if shield_mesh and shield_mesh.visible:
 		var target_z: float = -0.4 if active else -0.2
 		var target_rot_y: float = deg_to_rad(-15.0) if active else 0.0
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(shield_mesh, "position:z", target_z, 0.15)
 		tween.parallel().tween_property(shield_mesh, "rotation:y", target_rot_y, 0.15)
+	elif sword_pivot:
+		var target_rot_z: float = deg_to_rad(-45.0) if active else 0.0
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(sword_pivot, "rotation:z", target_rot_z, 0.15)
 
 func play_stagger_animation() -> void:
 	if not visual_pivot:
@@ -684,20 +773,51 @@ func play_finisher_animation() -> void:
 	if not sword_pivot:
 		return
 	var tween: Tween = create_tween().set_trans(Tween.TRANS_CIRC).set_ease(Tween.EASE_OUT)
-	# Leap up & execute
 	tween.tween_property(visual_pivot, "position:y", 0.8, 0.3)
 	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(-110.0), 0.3)
-	# Decisive plunge
 	tween.tween_property(visual_pivot, "position:y", 0.0, 0.25)
 	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(60.0), 0.25)
-	# Recovery
 	tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.5)
 
-func play_ability_cast_animation() -> void:
+# --- Ability Animations ---
+
+func play_dash_strike_animation() -> void:
 	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		tween.tween_property(visual_pivot, "scale", Vector3(1.15, 1.15, 1.15), 0.3)
-		tween.tween_property(visual_pivot, "scale", Vector3.ONE, 0.3)
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(25.0), 0.15)
+		tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.3)
+	if shield_mesh and shield_mesh.visible:
+		var s_tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		s_tween.tween_property(shield_mesh, "position:z", -0.7, 0.15)
+		s_tween.tween_property(shield_mesh, "position:z", -0.2, 0.3)
+
+func play_ground_breaker_animation() -> void:
+	if sword_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-120.0), 0.3)
+		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(60.0), 0.15)
+		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.3)
+
+func play_shadow_step_animation() -> void:
+	if character_mesh:
+		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
+		if mat:
+			var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE)
+			tween.tween_property(mat, "albedo_color:a", 0.15, 0.15)
+			tween.tween_property(mat, "albedo_color:a", 1.0, 0.2)
+
+func stop_ability_visuals() -> void:
+	if shockwave_mesh:
+		shockwave_mesh.visible = false
+
+@rpc("call_local", "unreliable")
+func rpc_trigger_shockwave_vfx() -> void:
+	if shockwave_mesh:
+		shockwave_mesh.visible = true
+		shockwave_mesh.scale = Vector3(0.1, 1.0, 0.1)
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+		tween.tween_property(shockwave_mesh, "scale", Vector3(1.2, 1.0, 1.2), 0.4)
+		tween.tween_callback(func(): shockwave_mesh.visible = false)
 
 func play_death_animation() -> void:
 	if visual_pivot:
@@ -726,7 +846,11 @@ func _on_remote_state_changed(_prev: String, current: String) -> void:
 		"FinisherState":
 			play_finisher_animation()
 		"AbilityState":
-			play_ability_cast_animation()
+			if character_data:
+				match character_data.ability_style:
+					CharacterData.AbilityStyle.DASH_STRIKE: play_dash_strike_animation()
+					CharacterData.AbilityStyle.RADIAL_AOE: play_ground_breaker_animation()
+					CharacterData.AbilityStyle.TELEPORT_STRIKE: play_shadow_step_animation()
 		"DeadState":
 			play_death_animation()
 
@@ -754,8 +878,8 @@ func rpc_flash_shield() -> void:
 
 @rpc("call_local", "unreliable")
 func rpc_flash_parry() -> void:
-	if shield_mesh and shield_mesh.material_override:
-		var mat: StandardMaterial3D = shield_mesh.material_override as StandardMaterial3D
+	if character_mesh and character_mesh.material_override:
+		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
 		if mat:
 			var orig_color: Color = mat.albedo_color
 			mat.albedo_color = Color(1.0, 0.9, 0.2, 1.0)
