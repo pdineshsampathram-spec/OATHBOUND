@@ -684,10 +684,10 @@ func _get_anim_player() -> AnimationPlayer:
 		_anim_player = knight_model.get_node_or_null("AnimationPlayer")
 	return _anim_player
 
-func _play_skeletal_animation(anim_name: String) -> void:
+func _play_skeletal_animation(anim_name: String, custom_blend: float = 0.15) -> void:
 	var ap: AnimationPlayer = _get_anim_player()
 	if ap and ap.has_animation(anim_name):
-		ap.play(anim_name)
+		ap.play(anim_name, custom_blend)
 
 func play_attack_animation() -> void:
 	_play_skeletal_animation("light_attack")
@@ -962,19 +962,18 @@ func _on_remote_state_changed(_prev: String, current: String) -> void:
 func rpc_flash_hit() -> void:
 	ImpactVFX.spawn_hit_sparks(self, global_position + Vector3(0, 1.1, 0), false)
 	if combat_audio: combat_audio.play_weapon_impact(false)
-	_play_skeletal_animation("hit_reaction")
+	_play_skeletal_animation("hit_reaction", 0.08)
+
+	# Client presentation hitstop (0.05s micro-freeze on visual mesh only)
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap:
+		ap.speed_scale = 0.0
+		get_tree().create_timer(0.05).timeout.connect(func(): if ap: ap.speed_scale = 1.0)
+
 	if is_local_player and camera_rig and camera_rig.has_node("SpringArm3D/Camera3D"):
 		var cam: Camera3D = camera_rig.get_node("SpringArm3D/Camera3D")
 		if cam.has_method("trigger_hit_shake"):
 			cam.trigger_hit_shake(false)
-	if character_mesh and character_mesh.material_override:
-		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
-		if mat:
-			var orig_color: Color = mat.albedo_color
-			mat.albedo_color = Color(1.0, 0.2, 0.2, 1.0)
-			await get_tree().create_timer(0.08).timeout
-			if mat:
-				mat.albedo_color = orig_color
 
 @rpc("call_local", "unreliable")
 func rpc_flash_shield() -> void:

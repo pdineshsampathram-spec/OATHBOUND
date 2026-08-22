@@ -22,9 +22,9 @@
 [ext_resource type="Script" path="res://scripts/combat/states/finisher_state.gd" id="20_finisher"]
 [ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="21_dead"]
 [ext_resource type="Script" path="res://scripts/audio/combat_audio.gd" id="22_audio"]
-[ext_resource type="PackedScene" path="res://assets/characters/knight_character.glb" id="23_knight"]
-[ext_resource type="PackedScene" path="res://assets/characters/weapons/longsword.glb" id="24_sword"]
-[ext_resource type="PackedScene" path="res://assets/characters/weapons/kite_shield.glb" id="25_shield"]
+[ext_resource type="PackedScene" path="res://assets/characters/hero_knight.glb" id="23_knight"]
+[ext_resource type="PackedScene" path="res://assets/characters/weapons/hero_longsword.glb" id="24_sword"]
+[ext_resource type="PackedScene" path="res://assets/characters/weapons/hero_kite_shield.glb" id="25_shield"]
 [ext_resource type="PackedScene" path="res://assets/characters/weapons/great_axe.glb" id="26_axe"]
 [ext_resource type="PackedScene" path="res://assets/characters/weapons/dagger.glb" id="27_dagger"]
 

@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" path="res://scenes/arena/medieval_arena.tscn" id="2_arena"]
+[ext_resource type="PackedScene" path="res://scenes/arena/ruined_fortress_arena.tscn" id="2_arena"]
 [ext_resource type="Script" path="res://scripts/combat/match_manager.gd" id="3_match"]
 [ext_resource type="PackedScene" path="res://scenes/test/test_dummy.tscn" id="4_dummy"]
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
@@ -9,7 +9,7 @@
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
-[node name="MedievalCourtyardArena" parent="." instance=ExtResource("2_arena")]
+[node name="RuinedFortressArena" parent="." instance=ExtResource("2_arena")]
 
 [node name="MatchManager" type="Node" parent="."]
 script = ExtResource("3_match")
