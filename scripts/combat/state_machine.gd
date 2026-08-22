@@ -42,7 +42,7 @@ func _physics_process(delta: float) -> void:
 	if _is_authority() and current_state:
 		current_state.physics_process_state(delta)
 
-func _is_authority() -> void:
+func _is_authority() -> bool:
 	if not multiplayer.has_multiplayer_peer():
 		return true
 	return multiplayer.is_server()

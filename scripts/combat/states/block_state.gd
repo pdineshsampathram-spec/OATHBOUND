@@ -1,11 +1,15 @@
 class_name BlockState
 extends State
 
-## BlockState — Defensive guard state reducing incoming damage at the cost of stamina on hit.
+## BlockState — Defensive guard reducing damage. If struck within parry_window, reflects into ParryState.
+
+var block_time: float = 0.0
 
 func enter(_msg: Dictionary = {}) -> void:
+	block_time = 0.0
 	if character:
 		character.is_blocking = true
+		character.block_active_duration = 0.0
 		character.set_guard_visual(true)
 		if character.stamina_component:
 			character.stamina_component.can_regenerate = false
@@ -25,6 +29,9 @@ func physics_process_state(delta: float) -> void:
 		transition_to("DeadState")
 		return
 
+	block_time += delta
+	character.block_active_duration = block_time
+
 	if character.wants_dodge() and character.has_stamina_for_dodge():
 		transition_to("DodgeState")
 		return
@@ -37,7 +44,7 @@ func physics_process_state(delta: float) -> void:
 			transition_to("IdleState")
 		return
 
-	# Handle guarded movement (slower speed)
+	# Slower guarded movement
 	var move_input: Vector2 = character.get_movement_input()
 	character.apply_gravity(delta)
 

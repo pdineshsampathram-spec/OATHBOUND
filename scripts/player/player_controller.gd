@@ -2,8 +2,10 @@ class_name PlayerController
 extends CharacterBody3D
 
 ## PlayerController — Server-authoritative multiplayer combat controller.
-## Server owns damage, hits, stamina, health, and combat state transitions.
+## Server owns damage, hits, stamina, health, poise, parries, and combat state transitions.
 ## Clients send input requests via RPCs and locally predict locomotion.
+
+enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 
 @export var character_data: CharacterData = null
 
@@ -25,6 +27,7 @@ extends CharacterBody3D
 @export var sync_rotation_y: float = 0.0
 @export var sync_health: float = 100.0
 @export var sync_stamina: float = 100.0
+@export var sync_poise: float = 50.0
 @export var sync_is_blocking: bool = false
 @export var sync_is_dead: bool = false
 @export var sync_state_name: String = "IdleState"
@@ -36,22 +39,43 @@ var is_server_authority: bool = true
 var gravity: float = 24.0
 var is_dead: bool = false
 var is_blocking: bool = false
+var is_finisher_vulnerable: bool = false
+var is_parry_empowered: bool = false
+var block_active_duration: float = 999.0
+
+# Poise system
+var current_poise: float = 50.0
+var _poise_regen_timer: float = 0.0
+
+# Combat strike data
+var current_attack_type: AttackType = AttackType.LIGHT
+var current_charge_ratio: float = 0.0
 
 # Server-side input caches from client RPCs
 var network_move_input: Vector2 = Vector2.ZERO
 var network_is_sprinting: bool = false
 var network_wants_attack: bool = false
+var network_attack_held: bool = false
+var network_wants_heavy: bool = false
+var network_wants_charged: bool = false
 var network_wants_block: bool = false
 var network_wants_dodge: bool = false
+var network_wants_finisher: bool = false
+var network_wants_ability: bool = false
 var network_dodge_dir: Vector3 = Vector3.ZERO
+
+# Local input tracking for charge/heavy detection
+var _local_attack_press_time: float = 0.0
+var _local_attack_held: bool = false
 
 var _attack_tween: Tween = null
 var _dodge_tween: Tween = null
+var _reaction_tween: Tween = null
+var _charge_tween: Tween = null
 var _hit_targets_this_swing: Array[Node] = []
 var _last_synced_state: String = ""
 
 func _enter_tree() -> void:
-	# Node name is set to peer_id string when spawned (e.g. "1", "23456")
 	if name.is_valid_int():
 		peer_id = name.to_int()
 		set_multiplayer_authority(peer_id)
@@ -60,7 +84,6 @@ func _ready() -> void:
 	if not character_data:
 		character_data = preload("res://resources/characters/default_fighter.tres")
 
-	# Determine authority roles
 	var is_mp_active: bool = multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if is_mp_active:
 		is_local_player = (multiplayer.get_unique_id() == peer_id)
@@ -69,11 +92,9 @@ func _ready() -> void:
 		is_local_player = true
 		is_server_authority = true
 
-	# Configure Camera for local player only
 	if camera_rig:
 		camera_rig.setup_authority(is_local_player)
 
-	# Initialize Components (Server authoritative values)
 	if health_component and character_data:
 		health_component.initialize(character_data.max_health)
 		health_component.died.connect(_on_death)
@@ -87,7 +108,10 @@ func _ready() -> void:
 		)
 		stamina_component.stamina_changed.connect(_on_stamina_changed)
 
-	# Hitbox is only active on the server
+	if character_data:
+		current_poise = character_data.max_poise
+		sync_poise = current_poise
+
 	if sword_hitbox:
 		sword_hitbox.monitoring = false
 		if is_server_authority:
@@ -99,25 +123,23 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_server_authority:
-		# Server runs the authoritative StateMachine and updates sync properties
+		_process_poise_regen(delta)
+
 		sync_position = global_position
 		sync_velocity = velocity
 		sync_rotation_y = visual_pivot.rotation.y
 		sync_is_blocking = is_blocking
 		sync_is_dead = is_dead
+		sync_poise = current_poise
 		if state_machine:
 			sync_state_name = state_machine.get_current_state_name()
 	else:
-		# Client / Remote Peer
 		if is_local_player:
-			# Local Client: Send inputs to server
-			_send_client_inputs()
+			_send_client_inputs(delta)
 		else:
-			# Remote player: Interpolate smoothly to synced transform
 			global_position = global_position.lerp(sync_position, 18.0 * delta)
 			visual_pivot.rotation.y = lerp_angle(visual_pivot.rotation.y, sync_rotation_y, 18.0 * delta)
 
-		# Remote animation / visual state reaction
 		if sync_state_name != _last_synced_state:
 			_on_remote_state_changed(_last_synced_state, sync_state_name)
 			_last_synced_state = sync_state_name
@@ -125,6 +147,16 @@ func _physics_process(delta: float) -> void:
 		if is_blocking != sync_is_blocking:
 			is_blocking = sync_is_blocking
 			set_guard_visual(is_blocking)
+
+func _process_poise_regen(delta: float) -> void:
+	if current_poise < character_data.max_poise:
+		_poise_regen_timer += delta
+		if _poise_regen_timer >= character_data.poise_regen_delay:
+			current_poise = minf(character_data.max_poise, current_poise + character_data.poise_regen_rate * delta)
+
+func restore_full_poise() -> void:
+	if character_data:
+		current_poise = character_data.max_poise
 
 func _on_health_changed(curr: float, _max_hp: float) -> void:
 	sync_health = curr
@@ -140,7 +172,7 @@ func _on_death() -> void:
 
 # --- Client Input Transmission ---
 
-func _send_client_inputs() -> void:
+func _send_client_inputs(delta: float) -> void:
 	if is_dead:
 		return
 
@@ -153,8 +185,27 @@ func _send_client_inputs() -> void:
 
 	rpc_id(1, "server_receive_movement", move_in, cam_dir, is_sprint)
 
+	# Attack holding & charging logic
 	if Input.is_action_just_pressed("attack"):
-		rpc_id(1, "server_receive_attack")
+		_local_attack_held = true
+		_local_attack_press_time = 0.0
+		rpc_id(1, "server_receive_attack_press", true)
+
+	if _local_attack_held:
+		_local_attack_press_time += delta
+		if _local_attack_press_time >= character_data.charged_attack_min_charge:
+			rpc_id(1, "server_receive_charged_attack")
+
+	if Input.is_action_just_released("attack"):
+		_local_attack_held = false
+		rpc_id(1, "server_receive_attack_press", false)
+		if _local_attack_press_time < 0.25:
+			rpc_id(1, "server_receive_attack")
+		elif _local_attack_press_time >= 0.25 and _local_attack_press_time < character_data.charged_attack_min_charge:
+			rpc_id(1, "server_receive_heavy_attack")
+
+	if Input.is_action_just_pressed("heavy_attack"):
+		rpc_id(1, "server_receive_heavy_attack")
 
 	var wants_blk: bool = Input.is_action_pressed("block")
 	if wants_blk != is_blocking:
@@ -164,10 +215,16 @@ func _send_client_inputs() -> void:
 		var d_dir: Vector3 = cam_dir if cam_dir.length_squared() > 0.01 else -visual_pivot.global_transform.basis.z.normalized()
 		rpc_id(1, "server_receive_dodge", d_dir)
 
+	if Input.is_action_just_pressed("finisher"):
+		rpc_id(1, "server_receive_finisher")
+
+	if Input.is_action_just_pressed("ability"):
+		rpc_id(1, "server_receive_ability")
+
 # --- Server RPC Receivers ---
 
 @rpc("any_peer", "call_remote", "unreliable")
-func server_receive_movement(move_input: Vector2, cam_relative_dir: Vector3, is_sprint: bool) -> void:
+func server_receive_movement(move_input: Vector2, _cam_relative_dir: Vector3, is_sprint: bool) -> void:
 	if not is_server_authority or is_dead:
 		return
 	network_move_input = move_input
@@ -178,6 +235,24 @@ func server_receive_attack() -> void:
 	if not is_server_authority or is_dead:
 		return
 	network_wants_attack = true
+
+@rpc("any_peer", "call_remote", "reliable")
+func server_receive_attack_press(pressed: bool) -> void:
+	if not is_server_authority or is_dead:
+		return
+	network_attack_held = pressed
+
+@rpc("any_peer", "call_remote", "reliable")
+func server_receive_heavy_attack() -> void:
+	if not is_server_authority or is_dead:
+		return
+	network_wants_heavy = true
+
+@rpc("any_peer", "call_remote", "reliable")
+func server_receive_charged_attack() -> void:
+	if not is_server_authority or is_dead:
+		return
+	network_wants_charged = true
 
 @rpc("any_peer", "call_remote", "reliable")
 func server_receive_block(blocking_active: bool) -> void:
@@ -192,7 +267,19 @@ func server_receive_dodge(direction: Vector3) -> void:
 	network_wants_dodge = true
 	network_dodge_dir = direction
 
-# --- State Machine Query Helpers (Server-side) ---
+@rpc("any_peer", "call_remote", "reliable")
+func server_receive_finisher() -> void:
+	if not is_server_authority or is_dead:
+		return
+	network_wants_finisher = true
+
+@rpc("any_peer", "call_remote", "reliable")
+func server_receive_ability() -> void:
+	if not is_server_authority or is_dead:
+		return
+	network_wants_ability = true
+
+# --- State Machine Input Query Helpers (Server-side) ---
 
 func get_movement_input() -> Vector2:
 	if is_dead:
@@ -213,9 +300,30 @@ func wants_attack() -> bool:
 		return false
 	if is_local_player and is_server_authority:
 		return Input.is_action_just_pressed("attack")
-	var result: bool = network_wants_attack
-	network_wants_attack = false # Consume trigger
-	return result
+	var res: bool = network_wants_attack
+	network_wants_attack = false
+	return res
+
+func is_attack_held() -> bool:
+	if is_local_player and is_server_authority:
+		return Input.is_action_pressed("attack")
+	return network_attack_held
+
+func wants_heavy_attack() -> bool:
+	if is_dead:
+		return false
+	if is_local_player and is_server_authority:
+		return Input.is_action_just_pressed("heavy_attack")
+	var res: bool = network_wants_heavy
+	network_wants_heavy = false
+	return res
+
+func wants_charged_attack() -> bool:
+	if is_dead:
+		return false
+	var res: bool = network_wants_charged
+	network_wants_charged = false
+	return res
 
 func wants_block() -> bool:
 	if is_dead:
@@ -229,14 +337,38 @@ func wants_dodge() -> bool:
 		return false
 	if is_local_player and is_server_authority:
 		return Input.is_action_just_pressed("dodge")
-	var result: bool = network_wants_dodge
-	network_wants_dodge = false # Consume trigger
-	return result
+	var res: bool = network_wants_dodge
+	network_wants_dodge = false
+	return res
+
+func wants_finisher() -> bool:
+	if is_dead:
+		return false
+	if is_local_player and is_server_authority:
+		return Input.is_action_just_pressed("finisher")
+	var res: bool = network_wants_finisher
+	network_wants_finisher = false
+	return res
+
+func wants_ability() -> bool:
+	if is_dead:
+		return false
+	if is_local_player and is_server_authority:
+		return Input.is_action_just_pressed("ability")
+	var res: bool = network_wants_ability
+	network_wants_ability = false
+	return res
 
 # --- Stamina Checks ---
 
 func has_stamina_for_attack() -> bool:
-	return stamina_component and character_data and stamina_component.has_enough(character_data.attack_stamina_cost)
+	return is_parry_empowered or (stamina_component and character_data and stamina_component.has_enough(character_data.attack_stamina_cost))
+
+func has_stamina_for_heavy() -> bool:
+	return stamina_component and character_data and stamina_component.has_enough(character_data.heavy_attack_stamina_cost)
+
+func has_stamina_for_charged() -> bool:
+	return stamina_component and character_data and stamina_component.has_enough(character_data.charged_attack_stamina_cost)
 
 func has_stamina_for_dodge() -> bool:
 	return stamina_component and character_data and stamina_component.has_enough(character_data.dodge_stamina_cost)
@@ -257,8 +389,6 @@ func get_camera_relative_direction(input_vector: Vector2) -> Vector3:
 		cam_right = cam_right.normalized()
 
 		return (cam_right * input_vector.x + cam_forward * -input_vector.y).normalized()
-	
-	# For server processing non-host clients, use player facing or network vector
 	return Vector3(input_vector.x, 0.0, input_vector.y).normalized()
 
 func apply_gravity(delta: float) -> void:
@@ -288,6 +418,37 @@ func rotate_towards_direction(direction: Vector3, delta: float) -> void:
 	var rot_speed: float = character_data.rotation_speed if character_data else 12.0
 	visual_pivot.rotation.y = lerp_angle(visual_pivot.rotation.y, target_angle, rot_speed * delta)
 
+# --- Finisher Target Evaluation ---
+
+func find_nearby_finisher_target() -> Node:
+	var arena_root: Node = get_parent()
+	if not arena_root:
+		return null
+
+	var closest: Node = null
+	var min_dist: float = character_data.finisher_range if character_data else 2.5
+
+	for peer_node in arena_root.get_children():
+		if peer_node == self:
+			continue
+		if peer_node is PlayerController:
+			var p: PlayerController = peer_node as PlayerController
+			if p.is_dead:
+				continue
+			var dist: float = global_position.distance_to(p.global_position)
+			if dist <= min_dist:
+				var is_crit_hp: bool = (p.health_component and p.health_component.current_health <= (p.character_data.max_health * character_data.finisher_health_threshold))
+				if p.is_finisher_vulnerable or is_crit_hp:
+					closest = p
+					min_dist = dist
+		elif peer_node.name.to_lower().contains("dummy"):
+			var dist: float = global_position.distance_to(peer_node.global_position)
+			if dist <= min_dist:
+				closest = peer_node
+				min_dist = dist
+
+	return closest
+
 # --- Hitbox & Server-Authoritative Damage ---
 
 func set_sword_hitbox_active(active: bool) -> void:
@@ -312,31 +473,62 @@ func _try_deal_damage(target: Node) -> void:
 		return
 
 	_hit_targets_this_swing.append(target)
-	var dmg: float = character_data.attack_damage if character_data else 18.0
 
-	if target.has_method("take_damage"):
-		target.take_damage(dmg, self)
+	var base_dmg: float = character_data.attack_damage
+	var poise_dmg: float = character_data.light_attack_poise_damage
+
+	match current_attack_type:
+		AttackType.LIGHT:
+			if is_parry_empowered:
+				base_dmg *= 1.5
+				poise_dmg *= 1.5
+		AttackType.HEAVY:
+			base_dmg = character_data.heavy_attack_damage
+			poise_dmg = character_data.heavy_attack_poise_damage
+		AttackType.CHARGED, AttackType.CHARGED_KNOCKDOWN:
+			base_dmg = lerpf(character_data.charged_attack_damage_min, character_data.charged_attack_damage_max, current_charge_ratio)
+			poise_dmg = lerpf(character_data.light_attack_poise_damage, character_data.charged_attack_poise_damage_max, current_charge_ratio)
+
+	if target.has_method("take_damage_complex"):
+		target.take_damage_complex(base_dmg, self, current_attack_type, poise_dmg)
+	elif target.has_method("take_damage"):
+		target.take_damage(base_dmg, self)
 	elif target.has_node("HealthComponent"):
 		var hc: HealthComponent = target.get_node("HealthComponent") as HealthComponent
 		if hc:
-			hc.take_damage(dmg, self)
+			hc.take_damage(base_dmg, self)
 
-func take_damage(amount: float, attacker: Node = null) -> float:
+func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackType = AttackType.LIGHT, poise_dmg: float = 12.0) -> float:
 	if is_dead:
 		return 0.0
 
-	var final_damage: float = amount
+	# 1. Check Parry Window
+	if is_blocking and block_active_duration <= character_data.parry_window:
+		# PARRY SUCCESS!
+		rpc("rpc_flash_parry")
+		if state_machine:
+			state_machine.transition_to("ParryState")
+		if attacker and attacker.has_method("trigger_stun"):
+			attacker.trigger_stun()
+		return 0.0
 
-	# Server evaluates block absorption
+	var final_damage: float = amount
+	_poise_regen_timer = 0.0
+
+	# 2. Check Standard Block
 	if is_blocking and character_data:
 		if stamina_component and stamina_component.has_enough(character_data.block_stamina_drain_per_hit):
 			stamina_component.consume(character_data.block_stamina_drain_per_hit)
 			final_damage = amount * (1.0 - character_data.block_damage_reduction)
+			current_poise -= poise_dmg * 0.3
 			rpc("rpc_flash_shield")
 		else:
 			# Guard break
 			if stamina_component:
 				stamina_component.consume(stamina_component.current_stamina)
+			current_poise = 0.0
+	else:
+		current_poise -= poise_dmg
 
 	var damage_dealt: float = 0.0
 	if health_component:
@@ -345,14 +537,27 @@ func take_damage(amount: float, attacker: Node = null) -> float:
 	if damage_dealt > 0.0:
 		rpc("rpc_flash_hit")
 
+	# 3. Check Poise Break -> Stagger or Knockdown
+	if not is_dead and state_machine:
+		if atk_type == AttackType.CHARGED_KNOCKDOWN:
+			state_machine.transition_to("KnockedDownState")
+		elif current_poise <= 0.0:
+			state_machine.transition_to("StaggeredState")
+
 	return damage_dealt
 
-# --- Visual & Animation RPCs for Clients ---
+func take_damage(amount: float, attacker: Node = null) -> float:
+	return take_damage_complex(amount, attacker, AttackType.LIGHT, 12.0)
+
+func trigger_stun() -> void:
+	if state_machine and not is_dead:
+		state_machine.transition_to("StunnedState")
+
+# --- Procedural Visual Animations & RPCs ---
 
 func play_attack_animation() -> void:
 	if not sword_pivot:
 		return
-
 	if _attack_tween and _attack_tween.is_valid():
 		_attack_tween.kill()
 
@@ -364,10 +569,62 @@ func play_attack_animation() -> void:
 	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.25)
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.25)
 
+func play_heavy_attack_animation() -> void:
+	if not sword_pivot:
+		return
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+
+	_attack_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# High overhead raise
+	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-90.0), 0.28)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(45.0), 0.28)
+	# Heavy slam downward
+	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(45.0), 0.22)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(-60.0), 0.22)
+	# Recovery
+	_attack_tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.35)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", 0.0, 0.35)
+
+func play_charge_buildup_animation() -> void:
+	if not sword_pivot:
+		return
+	if _charge_tween and _charge_tween.is_valid():
+		_charge_tween.kill()
+
+	_charge_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_charge_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(110.0), 0.4)
+	_charge_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(35.0), 0.4)
+	_charge_tween.parallel().tween_property(visual_pivot, "scale", Vector3(1.08, 1.08, 1.08), 0.4)
+
+func play_charged_attack_release_animation(_ratio: float) -> void:
+	stop_charge_visual()
+	if not sword_pivot:
+		return
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+
+	_attack_tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(-120.0), 0.2)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(-30.0), 0.2)
+	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.4)
+	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.4)
+
+func stop_charge_visual() -> void:
+	if _charge_tween and _charge_tween.is_valid():
+		_charge_tween.kill()
+	if visual_pivot:
+		visual_pivot.scale = Vector3.ONE
+
+func play_parry_success_animation() -> void:
+	if shield_mesh:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(shield_mesh, "position:z", -0.6, 0.1)
+		tween.tween_property(shield_mesh, "position:z", -0.2, 0.25)
+
 func play_dodge_animation() -> void:
 	if not visual_pivot:
 		return
-
 	if _dodge_tween and _dodge_tween.is_valid():
 		_dodge_tween.kill()
 
@@ -383,6 +640,65 @@ func set_guard_visual(active: bool) -> void:
 		tween.tween_property(shield_mesh, "position:z", target_z, 0.15)
 		tween.parallel().tween_property(shield_mesh, "rotation:y", target_rot_y, 0.15)
 
+func play_stagger_animation() -> void:
+	if not visual_pivot:
+		return
+	if _reaction_tween and _reaction_tween.is_valid():
+		_reaction_tween.kill()
+
+	_reaction_tween = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	_reaction_tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(-25.0), 0.15)
+	_reaction_tween.parallel().tween_property(visual_pivot, "rotation:y", deg_to_rad(20.0), 0.15)
+	_reaction_tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.4)
+	_reaction_tween.parallel().tween_property(visual_pivot, "rotation:y", 0.0, 0.4)
+
+func play_stun_animation() -> void:
+	if not visual_pivot:
+		return
+	if _reaction_tween and _reaction_tween.is_valid():
+		_reaction_tween.kill()
+
+	_reaction_tween = create_tween().set_loops(3).set_trans(Tween.TRANS_SINE)
+	_reaction_tween.tween_property(visual_pivot, "rotation:z", deg_to_rad(10.0), 0.1)
+	_reaction_tween.tween_property(visual_pivot, "rotation:z", deg_to_rad(-10.0), 0.1)
+	_reaction_tween.chain().tween_property(visual_pivot, "rotation:z", 0.0, 0.1)
+
+func play_knockdown_animation() -> void:
+	if visual_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(-90.0), 0.3)
+		tween.parallel().tween_property(visual_pivot, "position:y", -0.7, 0.3)
+
+func play_get_up_animation() -> void:
+	if visual_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.5)
+		tween.parallel().tween_property(visual_pivot, "position:y", 0.0, 0.5)
+
+func reset_knockdown_visual() -> void:
+	if visual_pivot:
+		visual_pivot.rotation.x = 0.0
+		visual_pivot.position.y = 0.0
+
+func play_finisher_animation() -> void:
+	if not sword_pivot:
+		return
+	var tween: Tween = create_tween().set_trans(Tween.TRANS_CIRC).set_ease(Tween.EASE_OUT)
+	# Leap up & execute
+	tween.tween_property(visual_pivot, "position:y", 0.8, 0.3)
+	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(-110.0), 0.3)
+	# Decisive plunge
+	tween.tween_property(visual_pivot, "position:y", 0.0, 0.25)
+	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(60.0), 0.25)
+	# Recovery
+	tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.5)
+
+func play_ability_cast_animation() -> void:
+	if visual_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(visual_pivot, "scale", Vector3(1.15, 1.15, 1.15), 0.3)
+		tween.tween_property(visual_pivot, "scale", Vector3.ONE, 0.3)
+
 func play_death_animation() -> void:
 	if visual_pivot:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
@@ -393,8 +709,24 @@ func _on_remote_state_changed(_prev: String, current: String) -> void:
 	match current:
 		"LightAttackState":
 			play_attack_animation()
+		"HeavyAttackState":
+			play_heavy_attack_animation()
+		"ChargedAttackState":
+			play_charge_buildup_animation()
+		"ParryState":
+			play_parry_success_animation()
 		"DodgeState":
 			play_dodge_animation()
+		"StaggeredState":
+			play_stagger_animation()
+		"StunnedState":
+			play_stun_animation()
+		"KnockedDownState":
+			play_knockdown_animation()
+		"FinisherState":
+			play_finisher_animation()
+		"AbilityState":
+			play_ability_cast_animation()
 		"DeadState":
 			play_death_animation()
 
@@ -417,5 +749,16 @@ func rpc_flash_shield() -> void:
 			var orig_color: Color = mat.albedo_color
 			mat.albedo_color = Color(0.3, 0.7, 1.0, 1.0)
 			await get_tree().create_timer(0.08).timeout
+			if mat:
+				mat.albedo_color = orig_color
+
+@rpc("call_local", "unreliable")
+func rpc_flash_parry() -> void:
+	if shield_mesh and shield_mesh.material_override:
+		var mat: StandardMaterial3D = shield_mesh.material_override as StandardMaterial3D
+		if mat:
+			var orig_color: Color = mat.albedo_color
+			mat.albedo_color = Color(1.0, 0.9, 0.2, 1.0)
+			await get_tree().create_timer(0.15).timeout
 			if mat:
 				mat.albedo_color = orig_color

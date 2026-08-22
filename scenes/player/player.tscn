@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://c6r8q0u2v4w8m"]
+[gd_scene load_steps=29 format=3 uid="uid://c6r8q0u2v4w8m"]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_cam"]
@@ -9,9 +9,17 @@
 [ext_resource type="Script" path="res://scripts/combat/states/movement_state.gd" id="7_move"]
 [ext_resource type="Script" path="res://scripts/combat/states/sprint_state.gd" id="8_sprint"]
 [ext_resource type="Script" path="res://scripts/combat/states/light_attack_state.gd" id="9_atk"]
-[ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="10_block"]
-[ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="11_dodge"]
-[ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="12_dead"]
+[ext_resource type="Script" path="res://scripts/combat/states/heavy_attack_state.gd" id="10_heavy"]
+[ext_resource type="Script" path="res://scripts/combat/states/charged_attack_state.gd" id="11_charge"]
+[ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="12_block"]
+[ext_resource type="Script" path="res://scripts/combat/states/parry_state.gd" id="13_parry"]
+[ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="14_dodge"]
+[ext_resource type="Script" path="res://scripts/combat/states/ability_state.gd" id="15_ability"]
+[ext_resource type="Script" path="res://scripts/combat/states/stunned_state.gd" id="16_stun"]
+[ext_resource type="Script" path="res://scripts/combat/states/staggered_state.gd" id="17_stagger"]
+[ext_resource type="Script" path="res://scripts/combat/states/knocked_down_state.gd" id="18_knockdown"]
+[ext_resource type="Script" path="res://scripts/combat/states/finisher_state.gd" id="19_finisher"]
+[ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="20_dead"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
 properties/0/path = NodePath(".:sync_position")
@@ -29,15 +37,18 @@ properties/3/replication_mode = 1
 properties/4/path = NodePath(".:sync_stamina")
 properties/4/spawn = true
 properties/4/replication_mode = 1
-properties/5/path = NodePath(".:sync_is_blocking")
+properties/5/path = NodePath(".:sync_poise")
 properties/5/spawn = true
 properties/5/replication_mode = 1
-properties/6/path = NodePath(".:sync_is_dead")
+properties/6/path = NodePath(".:sync_is_blocking")
 properties/6/spawn = true
 properties/6/replication_mode = 1
-properties/7/path = NodePath(".:sync_state_name")
+properties/7/path = NodePath(".:sync_is_dead")
 properties/7/spawn = true
 properties/7/replication_mode = 1
+properties/8/path = NodePath(".:sync_state_name")
+properties/8/spawn = true
+properties/8/replication_mode = 1
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
@@ -146,11 +157,35 @@ script = ExtResource("8_sprint")
 [node name="LightAttackState" type="Node" parent="StateMachine"]
 script = ExtResource("9_atk")
 
+[node name="HeavyAttackState" type="Node" parent="StateMachine"]
+script = ExtResource("10_heavy")
+
+[node name="ChargedAttackState" type="Node" parent="StateMachine"]
+script = ExtResource("11_charge")
+
 [node name="BlockState" type="Node" parent="StateMachine"]
-script = ExtResource("10_block")
+script = ExtResource("12_block")
+
+[node name="ParryState" type="Node" parent="StateMachine"]
+script = ExtResource("13_parry")
 
 [node name="DodgeState" type="Node" parent="StateMachine"]
-script = ExtResource("11_dodge")
+script = ExtResource("14_dodge")
+
+[node name="AbilityState" type="Node" parent="StateMachine"]
+script = ExtResource("15_ability")
+
+[node name="StunnedState" type="Node" parent="StateMachine"]
+script = ExtResource("16_stun")
+
+[node name="StaggeredState" type="Node" parent="StateMachine"]
+script = ExtResource("17_stagger")
+
+[node name="KnockedDownState" type="Node" parent="StateMachine"]
+script = ExtResource("18_knockdown")
+
+[node name="FinisherState" type="Node" parent="StateMachine"]
+script = ExtResource("19_finisher")
 
 [node name="DeadState" type="Node" parent="StateMachine"]
-script = ExtResource("12_dead")
+script = ExtResource("20_dead")
