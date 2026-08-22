@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3 uid="uid://shd2bs8r4v9x2"]
+
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+ability_name = "Blade Storm"
+description = "Executes a lightning-fast 6-hit flurry of slashes in 0.8 seconds, tearing apart enemies in front."
+category = 0
+execution_type = 6
+energy_cost = 35.0
+stamina_cost = 15.0
+cooldown = 10.0
+cast_time = 0.8
+duration = 0.0
+damage = 8.0
+poise_damage = 8.0
+range_distance = 3.0
+aoe_radius = 2.5
+hit_count = 6
+buff_multiplier = 1.0
+projectile_speed = 0.0
+vfx_color = Color(0.8, 0.3, 1, 1)
+animation_trigger = "blade_storm"

@@ -1,13 +1,22 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3 uid="uid://b7f8k1m3p9v2x"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=7 format=3 uid="uid://b7f8k1m3p9v2x"]
 
 [ext_resource type="Script" path="res://scripts/resources/character_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="2_ab_script"]
+[ext_resource type="Resource" uid="uid://knt1hg8r4v9x1" path="res://resources/abilities/knight_holy_guard.tres" id="3_holy_guard"]
+[ext_resource type="Resource" uid="uid://knt2js8r4v9x2" path="res://resources/abilities/knight_judgement_strike.tres" id="4_judgement"]
+[ext_resource type="Resource" uid="uid://knt3sr8r4v9x3" path="res://resources/abilities/knight_shield_rush.tres" id="5_shield_rush"]
+[ext_resource type="Resource" uid="uid://knt4de8r4v9x4" path="res://resources/abilities/knight_divine_execution.tres" id="6_divine_exec"]
 
 [resource]
 script = ExtResource("1_data")
 character_name = "Knight"
+character_title = "The Sentinel"
 character_description = "Balanced warrior with longsword and shield."
-max_health = 100.0
-max_poise = 50.0
+weapon_style = 0
+primary_color = Color(0.22, 0.28, 0.36, 1)
+accent_color = Color(0.18, 0.42, 0.68, 1)
+max_health = 120.0
+max_poise = 65.0
 poise_regen_rate = 15.0
 poise_regen_delay = 1.5
 max_stamina = 100.0
@@ -16,8 +25,10 @@ stamina_regen_delay = 0.8
 sprint_stamina_drain = 18.0
 dodge_stamina_cost = 20.0
 attack_stamina_cost = 14.0
-move_speed = 5.5
-sprint_speed = 8.5
+max_energy = 100.0
+energy_regen_rate = 15.0
+move_speed = 5.2
+sprint_speed = 8.0
 acceleration = 12.0
 deceleration = 14.0
 rotation_speed = 12.0
@@ -41,14 +52,14 @@ charged_attack_damage_max = 55.0
 charged_attack_stamina_cost = 30.0
 charged_attack_poise_damage_max = 60.0
 charged_attack_knockdown_threshold = 0.8
-block_damage_reduction = 0.75
-block_stamina_drain_per_hit = 15.0
+block_damage_reduction = 0.8
+block_stamina_drain_per_hit = 12.0
 block_move_speed_multiplier = 0.45
-parry_window = 0.18
+parry_window = 0.2
 parry_stun_duration = 0.7
 parry_counter_window = 0.9
 parry_stamina_cost = 8.0
-dodge_speed = 11.0
+dodge_speed = 10.5
 dodge_duration = 0.4
 dodge_iframe_start = 0.05
 dodge_iframe_end = 0.28
@@ -60,3 +71,4 @@ finisher_damage = 85.0
 finisher_duration = 1.3
 finisher_range = 2.5
 finisher_health_threshold = 0.25
+abilities = Array[ExtResource("2_ab_script")]([ExtResource("3_holy_guard"), ExtResource("4_judgement"), ExtResource("5_shield_rush"), ExtResource("6_divine_exec")])

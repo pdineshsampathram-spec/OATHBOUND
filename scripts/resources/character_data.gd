@@ -2,10 +2,9 @@ class_name CharacterData
 extends Resource
 
 ## Data-driven character configuration resource for OATHBOUND.
-## Defines base attributes, combat stats, stamina rates, poise, ability specs, and visual style.
+## Defines base attributes, combat stats, stamina rates, poise, supernatural abilities, and visual style.
 
 enum WeaponStyle { SWORD_SHIELD, GREAT_AXE, DUAL_BLADES }
-enum AbilityStyle { DASH_STRIKE, RADIAL_AOE, TELEPORT_STRIKE }
 
 @export_group("Character Identity")
 @export var character_name: String = "Knight"
@@ -28,6 +27,10 @@ enum AbilityStyle { DASH_STRIKE, RADIAL_AOE, TELEPORT_STRIKE }
 @export var sprint_stamina_drain: float = 18.0
 @export var dodge_stamina_cost: float = 20.0
 @export var attack_stamina_cost: float = 14.0
+
+@export_group("Supernatural Energy")
+@export var max_energy: float = 100.0
+@export var energy_regen_rate: float = 15.0
 
 @export_group("Movement")
 @export var move_speed: float = 5.2
@@ -87,14 +90,5 @@ enum AbilityStyle { DASH_STRIKE, RADIAL_AOE, TELEPORT_STRIKE }
 @export var finisher_range: float = 2.5
 @export var finisher_health_threshold: float = 0.25
 
-@export_group("Supernatural Ability")
-@export var ability_name: String = "Shield Rush"
-@export var ability_description: String = "Charges forward with shield raised, slamming foes for heavy damage and stagger."
-@export var ability_style: AbilityStyle = AbilityStyle.DASH_STRIKE
-@export var ability_damage: float = 25.0
-@export var ability_poise_damage: float = 40.0
-@export var ability_cooldown: float = 6.0
-@export var ability_cast_time: float = 0.6
-@export var ability_range: float = 6.0
-@export var ability_aoe_radius: float = 2.5
-@export var ability_stamina_cost: float = 20.0
+@export_group("Supernatural Abilities (4 Slots)")
+@export var abilities: Array[AbilityData] = []

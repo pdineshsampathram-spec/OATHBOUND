@@ -2,7 +2,7 @@ class_name PlayerController
 extends CharacterBody3D
 
 ## PlayerController — Server-authoritative multiplayer combat controller.
-## Server owns damage, hits, stamina, health, poise, parries, abilities, and combat state transitions.
+## Server owns damage, hits, stamina, health, poise, energy, abilities, and combat state transitions.
 ## Reuses identical controller logic across all 3 archetypes (Knight, Berserker, Shadow Warrior).
 
 enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
@@ -20,10 +20,12 @@ enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 @onready var sword_hitbox: Area3D = $VisualPivot/SwordPivot/SwordHitbox
 @onready var sword_collision: CollisionShape3D = $VisualPivot/SwordPivot/SwordHitbox/CollisionShape3D
 @onready var shockwave_mesh: MeshInstance3D = $VisualPivot/ShockwaveMesh
+@onready var barrier_mesh: MeshInstance3D = $VisualPivot/BarrierMesh
 @onready var camera_rig: CameraRig = $CameraRig
 @onready var state_machine: StateMachine = $StateMachine
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var stamina_component: StaminaComponent = $StaminaComponent
+@onready var ability_system: AbilitySystem = $AbilitySystem
 @onready var synchronizer: MultiplayerSynchronizer = $MultiplayerSynchronizer
 
 # Network Synchronized Variables (Server -> Clients)
@@ -33,6 +35,7 @@ enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 @export var sync_health: float = 120.0
 @export var sync_stamina: float = 100.0
 @export var sync_poise: float = 65.0
+@export var sync_energy: float = 100.0
 @export var sync_is_blocking: bool = false
 @export var sync_is_dead: bool = false
 @export var sync_state_name: String = "IdleState"
@@ -49,10 +52,9 @@ var is_finisher_vulnerable: bool = false
 var is_parry_empowered: bool = false
 var block_active_duration: float = 999.0
 
-# Poise & Ability system
+# Poise system
 var current_poise: float = 65.0
 var _poise_regen_timer: float = 0.0
-var ability_cooldown_remaining: float = 0.0
 
 # Combat strike data
 var current_attack_type: AttackType = AttackType.LIGHT
@@ -68,7 +70,7 @@ var network_wants_charged: bool = false
 var network_wants_block: bool = false
 var network_wants_dodge: bool = false
 var network_wants_finisher: bool = false
-var network_wants_ability: bool = false
+var network_requested_ability_slot: int = -1
 var network_dodge_dir: Vector3 = Vector3.ZERO
 
 # Local input tracking for charge/heavy detection
@@ -150,6 +152,11 @@ func _apply_character_data() -> void:
 		stamina_component.stamina_changed.connect(_on_stamina_changed)
 		sync_stamina = character_data.max_stamina
 
+	if ability_system:
+		ability_system.initialize(self, character_data)
+		ability_system.energy_changed.connect(_on_energy_changed)
+		sync_energy = character_data.max_energy
+
 	current_poise = character_data.max_poise
 	sync_poise = current_poise
 
@@ -159,7 +166,6 @@ func _configure_visual_archetype() -> void:
 	if not character_data or not visual_pivot:
 		return
 
-	# Material Colors
 	if character_mesh:
 		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.albedo_color = character_data.primary_color
@@ -167,7 +173,6 @@ func _configure_visual_archetype() -> void:
 		mat.roughness = 0.4
 		character_mesh.material_override = mat
 
-	# Weapon Style Switching
 	match character_data.weapon_style:
 		CharacterData.WeaponStyle.SWORD_SHIELD: # Knight
 			if shield_mesh: shield_mesh.visible = true
@@ -191,9 +196,6 @@ func _configure_visual_archetype() -> void:
 			if dagger_mesh: dagger_mesh.visible = true
 
 func _physics_process(delta: float) -> void:
-	if ability_cooldown_remaining > 0.0:
-		ability_cooldown_remaining = maxf(0.0, ability_cooldown_remaining - delta)
-
 	if is_server_authority:
 		_process_poise_regen(delta)
 
@@ -203,6 +205,8 @@ func _physics_process(delta: float) -> void:
 		sync_is_blocking = is_blocking
 		sync_is_dead = is_dead
 		sync_poise = current_poise
+		if ability_system:
+			sync_energy = ability_system.current_energy
 		if state_machine:
 			sync_state_name = state_machine.get_current_state_name()
 	else:
@@ -235,17 +239,14 @@ func restore_full_poise() -> void:
 	if character_data:
 		current_poise = character_data.max_poise
 
-func start_ability_cooldown(cooldown: float) -> void:
-	ability_cooldown_remaining = cooldown
-
-func can_use_ability() -> bool:
-	return ability_cooldown_remaining <= 0.0 and stamina_component and character_data and stamina_component.has_enough(character_data.ability_stamina_cost)
-
 func _on_health_changed(curr: float, _max_hp: float) -> void:
 	sync_health = curr
 
 func _on_stamina_changed(curr: float, _max_stm: float) -> void:
 	sync_stamina = curr
+
+func _on_energy_changed(curr: float, _max_energy: float) -> void:
+	sync_energy = curr
 
 func _on_death() -> void:
 	is_dead = true
@@ -300,8 +301,15 @@ func _send_client_inputs(delta: float) -> void:
 	if Input.is_action_just_pressed("finisher"):
 		rpc_id(1, "server_receive_finisher")
 
-	if Input.is_action_just_pressed("ability"):
-		rpc_id(1, "server_receive_ability")
+	# 4 Ability Slots
+	if Input.is_action_just_pressed("ability_1"):
+		rpc_id(1, "server_receive_ability_slot", 0)
+	elif Input.is_action_just_pressed("ability_2"):
+		rpc_id(1, "server_receive_ability_slot", 1)
+	elif Input.is_action_just_pressed("ability_3") or Input.is_action_just_pressed("ability"):
+		rpc_id(1, "server_receive_ability_slot", 2)
+	elif Input.is_action_just_pressed("ultimate"):
+		rpc_id(1, "server_receive_ability_slot", 3)
 
 # --- Server RPC Receivers ---
 
@@ -356,10 +364,11 @@ func server_receive_finisher() -> void:
 	network_wants_finisher = true
 
 @rpc("any_peer", "call_remote", "reliable")
-func server_receive_ability() -> void:
+func server_receive_ability_slot(slot: int) -> void:
 	if not is_server_authority or is_dead:
 		return
-	network_wants_ability = true
+	if ability_system and ability_system.can_cast(slot):
+		network_requested_ability_slot = slot
 
 # --- State Machine Input Query Helpers (Server-side) ---
 
@@ -432,13 +441,23 @@ func wants_finisher() -> bool:
 	network_wants_finisher = false
 	return res
 
-func wants_ability() -> bool:
-	if is_dead or not can_use_ability():
-		return false
+func get_requested_ability_slot() -> int:
+	if is_dead or not ability_system:
+		return -1
+
 	if is_local_player and is_server_authority:
-		return Input.is_action_just_pressed("ability")
-	var res: bool = network_wants_ability
-	network_wants_ability = false
+		if Input.is_action_just_pressed("ability_1") and ability_system.can_cast(0):
+			return 0
+		elif Input.is_action_just_pressed("ability_2") and ability_system.can_cast(1):
+			return 1
+		elif (Input.is_action_just_pressed("ability_3") or Input.is_action_just_pressed("ability")) and ability_system.can_cast(2):
+			return 2
+		elif Input.is_action_just_pressed("ultimate") and ability_system.can_cast(3):
+			return 3
+		return -1
+
+	var res: int = network_requested_ability_slot
+	network_requested_ability_slot = -1
 	return res
 
 # --- Stamina Checks ---
@@ -571,6 +590,9 @@ func _try_deal_damage(target: Node) -> void:
 			base_dmg = lerpf(character_data.charged_attack_damage_min, character_data.charged_attack_damage_max, current_charge_ratio)
 			poise_dmg = lerpf(character_data.light_attack_poise_damage, character_data.charged_attack_poise_damage_max, current_charge_ratio)
 
+	if ability_system:
+		base_dmg *= ability_system.get_outgoing_damage_multiplier()
+
 	if target.has_method("take_damage_complex"):
 		target.take_damage_complex(base_dmg, self, current_attack_type, poise_dmg)
 	elif target.has_method("take_damage"):
@@ -595,10 +617,14 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 	var final_damage: float = amount
 	_poise_regen_timer = 0.0
 
+	# Holy guard buff reduction
+	if ability_system:
+		final_damage *= ability_system.get_incoming_damage_multiplier()
+
 	if is_blocking and character_data:
 		if stamina_component and stamina_component.has_enough(character_data.block_stamina_drain_per_hit):
 			stamina_component.consume(character_data.block_stamina_drain_per_hit)
-			final_damage = amount * (1.0 - character_data.block_damage_reduction)
+			final_damage = final_damage * (1.0 - character_data.block_damage_reduction)
 			current_poise -= poise_dmg * 0.3
 			rpc("rpc_flash_shield")
 		else:
@@ -646,7 +672,6 @@ func play_attack_animation() -> void:
 	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.2)
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.2)
 
-	# Left dagger swing for dual blades
 	if left_hand_pivot and left_hand_pivot.visible:
 		var l_tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		l_tween.tween_property(left_hand_pivot, "rotation:y", deg_to_rad(-65.0), 0.1)
@@ -781,6 +806,12 @@ func play_finisher_animation() -> void:
 
 # --- Ability Animations ---
 
+func play_ability_cast_animation() -> void:
+	if visual_pivot:
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(visual_pivot, "scale", Vector3(1.15, 1.15, 1.15), 0.2)
+		tween.tween_property(visual_pivot, "scale", Vector3.ONE, 0.2)
+
 func play_dash_strike_animation() -> void:
 	if visual_pivot:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -799,7 +830,7 @@ func play_ground_breaker_animation() -> void:
 		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.3)
 
 func play_shadow_step_animation() -> void:
-	if character_mesh:
+	if character_mesh and character_mesh.material_override:
 		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
 		if mat:
 			var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE)
@@ -819,6 +850,44 @@ func rpc_trigger_shockwave_vfx() -> void:
 		tween.tween_property(shockwave_mesh, "scale", Vector3(1.2, 1.0, 1.2), 0.4)
 		tween.tween_callback(func(): shockwave_mesh.visible = false)
 
+@rpc("call_local", "unreliable")
+func rpc_trigger_buff_vfx(color: Color) -> void:
+	if barrier_mesh:
+		barrier_mesh.visible = true
+		var mat: StandardMaterial3D = barrier_mesh.get_surface_override_material(0) as StandardMaterial3D
+		if not mat:
+			mat = StandardMaterial3D.new()
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			barrier_mesh.set_surface_override_material(0, mat)
+		mat.albedo_color = Color(color.r, color.g, color.b, 0.35)
+		mat.emission_enabled = true
+		mat.emission = color
+		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE)
+		tween.tween_property(barrier_mesh, "scale", Vector3(1.1, 1.1, 1.1), 0.25)
+		tween.tween_property(barrier_mesh, "scale", Vector3.ONE, 0.25)
+		await get_tree().create_timer(3.0).timeout
+		if barrier_mesh:
+			barrier_mesh.visible = false
+
+@rpc("call_local", "unreliable")
+func rpc_spawn_axe_projectile(spawn_pos: Vector3, dir: Vector3) -> void:
+	# Procedural spinning axe mesh projectile
+	var proj: MeshInstance3D = MeshInstance3D.new()
+	var box: BoxMesh = BoxMesh.new()
+	box.size = Vector3(0.1, 0.6, 0.3)
+	proj.mesh = box
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.2, 0.1, 1.0)
+	proj.material_override = mat
+	get_parent().add_child(proj)
+	proj.global_position = spawn_pos
+	
+	var tween: Tween = create_tween()
+	var target_pos: Vector3 = spawn_pos + dir * 14.0
+	tween.tween_property(proj, "global_position", target_pos, 0.6)
+	tween.parallel().tween_property(proj, "rotation:z", deg_to_rad(1080.0), 0.6)
+	tween.tween_callback(proj.queue_free)
+
 func play_death_animation() -> void:
 	if visual_pivot:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
@@ -827,32 +896,17 @@ func play_death_animation() -> void:
 
 func _on_remote_state_changed(_prev: String, current: String) -> void:
 	match current:
-		"LightAttackState":
-			play_attack_animation()
-		"HeavyAttackState":
-			play_heavy_attack_animation()
-		"ChargedAttackState":
-			play_charge_buildup_animation()
-		"ParryState":
-			play_parry_success_animation()
-		"DodgeState":
-			play_dodge_animation()
-		"StaggeredState":
-			play_stagger_animation()
-		"StunnedState":
-			play_stun_animation()
-		"KnockedDownState":
-			play_knockdown_animation()
-		"FinisherState":
-			play_finisher_animation()
-		"AbilityState":
-			if character_data:
-				match character_data.ability_style:
-					CharacterData.AbilityStyle.DASH_STRIKE: play_dash_strike_animation()
-					CharacterData.AbilityStyle.RADIAL_AOE: play_ground_breaker_animation()
-					CharacterData.AbilityStyle.TELEPORT_STRIKE: play_shadow_step_animation()
-		"DeadState":
-			play_death_animation()
+		"LightAttackState": play_attack_animation()
+		"HeavyAttackState": play_heavy_attack_animation()
+		"ChargedAttackState": play_charge_buildup_animation()
+		"ParryState": play_parry_success_animation()
+		"DodgeState": play_dodge_animation()
+		"StaggeredState": play_stagger_animation()
+		"StunnedState": play_stun_animation()
+		"KnockedDownState": play_knockdown_animation()
+		"FinisherState": play_finisher_animation()
+		"AbilityState": play_ability_cast_animation()
+		"DeadState": play_death_animation()
 
 @rpc("call_local", "unreliable")
 func rpc_flash_hit() -> void:

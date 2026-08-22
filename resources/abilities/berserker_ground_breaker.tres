@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3 uid="uid://bsk2gb8r4v9x2"]
+
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+ability_name = "Ground Breaker"
+description = "Slams the greataxe into the arena floor, unleashing a devastating seismic shockwave in all directions."
+category = 3
+execution_type = 2
+energy_cost = 25.0
+stamina_cost = 15.0
+cooldown = 8.0
+cast_time = 0.7
+duration = 0.0
+damage = 35.0
+poise_damage = 60.0
+range_distance = 0.0
+aoe_radius = 4.5
+hit_count = 1
+buff_multiplier = 1.0
+projectile_speed = 0.0
+vfx_color = Color(1, 0.45, 0.1, 1)
+animation_trigger = "ground_slam"

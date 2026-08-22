@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3 uid="uid://shd3st8r4v9x3"]
+
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+ability_name = "Shadow Step"
+description = "Blinks instantly through the shadows 6.5 meters forward, dealing a devastating strike."
+category = 2
+execution_type = 3
+energy_cost = 18.0
+stamina_cost = 10.0
+cooldown = 5.0
+cast_time = 0.4
+duration = 0.0
+damage = 30.0
+poise_damage = 35.0
+range_distance = 6.5
+aoe_radius = 2.0
+hit_count = 1
+buff_multiplier = 1.0
+projectile_speed = 0.0
+vfx_color = Color(0.65, 0.25, 0.85, 1)
+animation_trigger = "shadow_step"

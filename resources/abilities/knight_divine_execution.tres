@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3 uid="uid://knt4de8r4v9x4"]
+
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+ability_name = "Divine Execution"
+description = "Unleashes an overwhelming burst of holy energy delivering a catastrophic 120 damage execution blow."
+category = 4
+execution_type = 0
+energy_cost = 80.0
+stamina_cost = 0.0
+cooldown = 45.0
+cast_time = 0.9
+duration = 0.0
+damage = 120.0
+poise_damage = 90.0
+range_distance = 4.0
+aoe_radius = 2.5
+hit_count = 1
+buff_multiplier = 1.0
+projectile_speed = 0.0
+vfx_color = Color(1, 0.95, 0.4, 1)
+animation_trigger = "ultimate_strike"

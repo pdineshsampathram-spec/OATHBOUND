@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3 uid="uid://bsk4wr8r4v9x4"]
+
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+ability_name = "Wrath"
+description = "Unleashes an uncontrollable 3-pulse seismic eruption around the Berserker, shattering armor in a 6m radius."
+category = 4
+execution_type = 8
+energy_cost = 90.0
+stamina_cost = 0.0
+cooldown = 50.0
+cast_time = 1.2
+duration = 1.8
+damage = 65.0
+poise_damage = 75.0
+range_distance = 0.0
+aoe_radius = 6.0
+hit_count = 3
+buff_multiplier = 1.0
+projectile_speed = 0.0
+vfx_color = Color(1, 0.1, 0.05, 1)
+animation_trigger = "wrath_eruption"

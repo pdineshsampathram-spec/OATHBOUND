@@ -1,7 +1,7 @@
 class_name IdleState
 extends State
 
-## IdleState — Grounded, stationary state where stamina and poise freely regenerate.
+## IdleState — Grounded, stationary state where stamina, poise, and supernatural energy regenerate.
 
 func enter(_msg: Dictionary = {}) -> void:
 	if character and character.stamina_component:
@@ -26,28 +26,29 @@ func physics_process_state(delta: float) -> void:
 			transition_to("FinisherState", {"target": target})
 			return
 
-	# 2. Charged Attack
+	# 2. Abilities (Slots 0, 1, 2, 3)
+	var ability_slot: int = character.get_requested_ability_slot()
+	if ability_slot >= 0:
+		transition_to("AbilityState", {"slot": ability_slot})
+		return
+
+	# 3. Charged Attack
 	if character.wants_charged_attack():
 		if character.has_stamina_for_charged():
 			transition_to("ChargedAttackState")
 			return
 
-	# 3. Heavy Attack
+	# 4. Heavy Attack
 	if character.wants_heavy_attack():
 		if character.has_stamina_for_heavy():
 			transition_to("HeavyAttackState")
 			return
 
-	# 4. Light Attack
+	# 5. Light Attack
 	if character.wants_attack():
 		if character.has_stamina_for_attack():
 			transition_to("LightAttackState")
 			return
-
-	# 5. Ability
-	if character.wants_ability():
-		transition_to("AbilityState")
-		return
 
 	# 6. Block
 	if character.wants_block():

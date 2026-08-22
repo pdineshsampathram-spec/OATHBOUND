@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://df7k2m5q8w1v9"]
+[gd_scene load_steps=10 format=3 uid="uid://df7k2m5q8w1v9"]
 
 [ext_resource type="Script" path="res://scripts/ui/combat_hud.gd" id="1_hud"]
 
@@ -59,6 +59,25 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_en_bg"]
+bg_color = Color(0.04, 0.06, 0.12, 0.75)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.15, 0.25, 0.45, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_en_fill"]
+bg_color = Color(0.25, 0.65, 0.95, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [node name="CombatHUD" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1_hud")
@@ -77,15 +96,15 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -180.0
-offset_right = 360.0
+offset_top = -220.0
+offset_right = 440.0
 grow_vertical = 0
 theme_override_constants/margin_left = 24
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_bottom = 18
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Control/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 5
+theme_override_constants/separation = 4
 
 [node name="CharLabel" type="Label" parent="Control/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -94,7 +113,7 @@ theme_override_font_sizes/font_size = 13
 text = "KNIGHT — The Sentinel"
 
 [node name="HealthBar" type="ProgressBar" parent="Control/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(250, 16)
+custom_minimum_size = Vector2(260, 15)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
@@ -102,7 +121,7 @@ value = 120.0
 show_percentage = false
 
 [node name="StaminaBar" type="ProgressBar" parent="Control/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(220, 9)
+custom_minimum_size = Vector2(230, 8)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_stm_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_stm_fill")
@@ -110,18 +129,48 @@ value = 100.0
 show_percentage = false
 
 [node name="PoiseBar" type="ProgressBar" parent="Control/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(180, 6)
+custom_minimum_size = Vector2(190, 5)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_poise_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_poise_fill")
 value = 65.0
 show_percentage = false
 
-[node name="AbilityLabel" type="Label" parent="Control/MarginContainer/VBoxContainer"]
+[node name="EnergyBar" type="ProgressBar" parent="Control/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(210, 6)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_en_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_en_fill")
+value = 100.0
+show_percentage = false
+
+[node name="AbilitiesContainer" type="HBoxContainer" parent="Control/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Slot0" type="Label" parent="Control/MarginContainer/VBoxContainer/AbilitiesContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.95, 0.5, 1)
 theme_override_font_sizes/font_size = 11
-text = "[Q] Shield Rush: READY"
+text = "[1] Holy Guard"
+
+[node name="Slot1" type="Label" parent="Control/MarginContainer/VBoxContainer/AbilitiesContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.95, 0.5, 1)
+theme_override_font_sizes/font_size = 11
+text = "[2] Judgement Strike"
+
+[node name="Slot2" type="Label" parent="Control/MarginContainer/VBoxContainer/AbilitiesContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.95, 0.5, 1)
+theme_override_font_sizes/font_size = 11
+text = "[Q] Shield Rush"
+
+[node name="Slot3" type="Label" parent="Control/MarginContainer/VBoxContainer/AbilitiesContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 11
+text = "[R] Divine Execution"
 
 [node name="StateLabel" type="Label" parent="Control/MarginContainer/VBoxContainer"]
 layout_mode = 2

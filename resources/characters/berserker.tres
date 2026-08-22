@@ -1,6 +1,11 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3 uid="uid://df5m8k2v4p9x1"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=7 format=3 uid="uid://df5m8k2v4p9x1"]
 
 [ext_resource type="Script" path="res://scripts/resources/character_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="2_ab_script"]
+[ext_resource type="Resource" uid="uid://bsk1br8r4v9x1" path="res://resources/abilities/berserker_blood_rage.tres" id="3_blood_rage"]
+[ext_resource type="Resource" uid="uid://bsk3at8r4v9x3" path="res://resources/abilities/berserker_axe_throw.tres" id="4_axe_throw"]
+[ext_resource type="Resource" uid="uid://bsk2gb8r4v9x2" path="res://resources/abilities/berserker_ground_breaker.tres" id="5_ground_breaker"]
+[ext_resource type="Resource" uid="uid://bsk4wr8r4v9x4" path="res://resources/abilities/berserker_wrath.tres" id="6_wrath"]
 
 [resource]
 script = ExtResource("1_data")
@@ -20,6 +25,8 @@ stamina_regen_delay = 0.9
 sprint_stamina_drain = 20.0
 dodge_stamina_cost = 24.0
 attack_stamina_cost = 18.0
+max_energy = 100.0
+energy_regen_rate = 15.0
 move_speed = 4.8
 sprint_speed = 7.6
 acceleration = 10.0
@@ -64,13 +71,4 @@ finisher_damage = 95.0
 finisher_duration = 1.35
 finisher_range = 2.6
 finisher_health_threshold = 0.3
-ability_name = "Ground Breaker"
-ability_description = "Slams the greataxe into the arena floor, unleashing a devastating seismic shockwave in all directions."
-ability_style = 1
-ability_damage = 35.0
-ability_poise_damage = 60.0
-ability_cooldown = 8.0
-ability_cast_time = 0.7
-ability_range = 0.0
-ability_aoe_radius = 4.5
-ability_stamina_cost = 25.0
+abilities = Array[ExtResource("2_ab_script")]([ExtResource("3_blood_rage"), ExtResource("4_axe_throw"), ExtResource("5_ground_breaker"), ExtResource("6_wrath")])

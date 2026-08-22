@@ -1,6 +1,11 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3 uid="uid://cx6r9k1m3p4v2"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=7 format=3 uid="uid://cx6r9k1m3p4v2"]
 
 [ext_resource type="Script" path="res://scripts/resources/character_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="2_ab_script"]
+[ext_resource type="Resource" uid="uid://knt1hg8r4v9x1" path="res://resources/abilities/knight_holy_guard.tres" id="3_holy_guard"]
+[ext_resource type="Resource" uid="uid://knt2js8r4v9x2" path="res://resources/abilities/knight_judgement_strike.tres" id="4_judgement"]
+[ext_resource type="Resource" uid="uid://knt3sr8r4v9x3" path="res://resources/abilities/knight_shield_rush.tres" id="5_shield_rush"]
+[ext_resource type="Resource" uid="uid://knt4de8r4v9x4" path="res://resources/abilities/knight_divine_execution.tres" id="6_divine_exec"]
 
 [resource]
 script = ExtResource("1_data")
@@ -20,6 +25,8 @@ stamina_regen_delay = 0.8
 sprint_stamina_drain = 18.0
 dodge_stamina_cost = 20.0
 attack_stamina_cost = 14.0
+max_energy = 100.0
+energy_regen_rate = 15.0
 move_speed = 5.2
 sprint_speed = 8.0
 acceleration = 12.0
@@ -64,13 +71,4 @@ finisher_damage = 85.0
 finisher_duration = 1.3
 finisher_range = 2.5
 finisher_health_threshold = 0.25
-ability_name = "Shield Rush"
-ability_description = "Charges forward with shield raised, slamming foes for heavy damage and stagger."
-ability_style = 0
-ability_damage = 25.0
-ability_poise_damage = 40.0
-ability_cooldown = 6.0
-ability_cast_time = 0.5
-ability_range = 6.5
-ability_aoe_radius = 2.0
-ability_stamina_cost = 20.0
+abilities = Array[ExtResource("2_ab_script")]([ExtResource("3_holy_guard"), ExtResource("4_judgement"), ExtResource("5_shield_rush"), ExtResource("6_divine_exec")])

@@ -1,25 +1,26 @@
-[gd_scene load_steps=34 format=3 uid="uid://c6r8q0u2v4w8m"]
+[gd_scene load_steps=38 format=3 uid="uid://c6r8q0u2v4w8m"]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_cam"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="3_hp"]
 [ext_resource type="Script" path="res://scripts/combat/stamina_component.gd" id="4_stm"]
-[ext_resource type="Script" path="res://scripts/combat/state_machine.gd" id="5_sm"]
-[ext_resource type="Script" path="res://scripts/combat/states/idle_state.gd" id="6_idle"]
-[ext_resource type="Script" path="res://scripts/combat/states/movement_state.gd" id="7_move"]
-[ext_resource type="Script" path="res://scripts/combat/states/sprint_state.gd" id="8_sprint"]
-[ext_resource type="Script" path="res://scripts/combat/states/light_attack_state.gd" id="9_atk"]
-[ext_resource type="Script" path="res://scripts/combat/states/heavy_attack_state.gd" id="10_heavy"]
-[ext_resource type="Script" path="res://scripts/combat/states/charged_attack_state.gd" id="11_charge"]
-[ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="12_block"]
-[ext_resource type="Script" path="res://scripts/combat/states/parry_state.gd" id="13_parry"]
-[ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="14_dodge"]
-[ext_resource type="Script" path="res://scripts/combat/states/ability_state.gd" id="15_ability"]
-[ext_resource type="Script" path="res://scripts/combat/states/stunned_state.gd" id="16_stun"]
-[ext_resource type="Script" path="res://scripts/combat/states/staggered_state.gd" id="17_stagger"]
-[ext_resource type="Script" path="res://scripts/combat/states/knocked_down_state.gd" id="18_knockdown"]
-[ext_resource type="Script" path="res://scripts/combat/states/finisher_state.gd" id="19_finisher"]
-[ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="20_dead"]
+[ext_resource type="Script" path="res://scripts/combat/ability_system.gd" id="5_absys"]
+[ext_resource type="Script" path="res://scripts/combat/state_machine.gd" id="6_sm"]
+[ext_resource type="Script" path="res://scripts/combat/states/idle_state.gd" id="7_idle"]
+[ext_resource type="Script" path="res://scripts/combat/states/movement_state.gd" id="8_move"]
+[ext_resource type="Script" path="res://scripts/combat/states/sprint_state.gd" id="9_sprint"]
+[ext_resource type="Script" path="res://scripts/combat/states/light_attack_state.gd" id="10_atk"]
+[ext_resource type="Script" path="res://scripts/combat/states/heavy_attack_state.gd" id="11_heavy"]
+[ext_resource type="Script" path="res://scripts/combat/states/charged_attack_state.gd" id="12_charge"]
+[ext_resource type="Script" path="res://scripts/combat/states/block_state.gd" id="13_block"]
+[ext_resource type="Script" path="res://scripts/combat/states/parry_state.gd" id="14_parry"]
+[ext_resource type="Script" path="res://scripts/combat/states/dodge_state.gd" id="15_dodge"]
+[ext_resource type="Script" path="res://scripts/combat/states/ability_state.gd" id="16_ability"]
+[ext_resource type="Script" path="res://scripts/combat/states/stunned_state.gd" id="17_stun"]
+[ext_resource type="Script" path="res://scripts/combat/states/staggered_state.gd" id="18_stagger"]
+[ext_resource type="Script" path="res://scripts/combat/states/knocked_down_state.gd" id="19_knockdown"]
+[ext_resource type="Script" path="res://scripts/combat/states/finisher_state.gd" id="20_finisher"]
+[ext_resource type="Script" path="res://scripts/combat/states/dead_state.gd" id="21_dead"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
 properties/0/path = NodePath(".:sync_position")
@@ -40,18 +41,21 @@ properties/4/replication_mode = 1
 properties/5/path = NodePath(".:sync_poise")
 properties/5/spawn = true
 properties/5/replication_mode = 1
-properties/6/path = NodePath(".:sync_is_blocking")
+properties/6/path = NodePath(".:sync_energy")
 properties/6/spawn = true
 properties/6/replication_mode = 1
-properties/7/path = NodePath(".:sync_is_dead")
+properties/7/path = NodePath(".:sync_is_blocking")
 properties/7/spawn = true
 properties/7/replication_mode = 1
-properties/8/path = NodePath(".:sync_state_name")
+properties/8/path = NodePath(".:sync_is_dead")
 properties/8/spawn = true
 properties/8/replication_mode = 1
-properties/9/path = NodePath(".:sync_character_class")
+properties/9/path = NodePath(".:sync_state_name")
 properties/9/spawn = true
-properties/9/replication_mode = 2
+properties/9/replication_mode = 1
+properties/10/path = NodePath(".:sync_character_class")
+properties/10/spawn = true
+properties/10/replication_mode = 2
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
@@ -81,6 +85,10 @@ albedo_color = Color(0.85, 0.88, 0.92, 1)
 metallic = 0.9
 roughness = 0.25
 
+[sub_resource type="BoxMesh" id="BoxMesh_dagger"]
+material = SubResource("StandardMaterial3D_sword")
+size = Vector3(0.04, 0.6, 0.08)
+
 [sub_resource type="BoxMesh" id="BoxMesh_sword"]
 material = SubResource("StandardMaterial3D_sword")
 size = Vector3(0.06, 0.9, 0.12)
@@ -88,10 +96,6 @@ size = Vector3(0.06, 0.9, 0.12)
 [sub_resource type="BoxMesh" id="BoxMesh_axe"]
 material = SubResource("StandardMaterial3D_sword")
 size = Vector3(0.12, 1.2, 0.35)
-
-[sub_resource type="BoxMesh" id="BoxMesh_dagger"]
-material = SubResource("StandardMaterial3D_sword")
-size = Vector3(0.04, 0.6, 0.08)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_sword"]
 size = Vector3(0.4, 1.2, 0.6)
@@ -107,6 +111,17 @@ material = SubResource("StandardMaterial3D_shockwave")
 top_radius = 4.0
 bottom_radius = 4.0
 height = 0.1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_barrier"]
+transparency = 1
+albedo_color = Color(1, 0.85, 0.3, 0.3)
+emission_enabled = true
+emission = Color(1, 0.85, 0.3, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_barrier"]
+material = SubResource("StandardMaterial3D_barrier")
+radius = 1.1
+height = 2.2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -169,6 +184,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 visible = false
 mesh = SubResource("CylinderMesh_shockwave")
 
+[node name="BarrierMesh" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+visible = false
+mesh = SubResource("SphereMesh_barrier")
+
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("2_cam")
 
@@ -187,51 +207,54 @@ script = ExtResource("3_hp")
 [node name="StaminaComponent" type="Node" parent="."]
 script = ExtResource("4_stm")
 
+[node name="AbilitySystem" type="Node" parent="."]
+script = ExtResource("5_absys")
+
 [node name="StateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
-script = ExtResource("5_sm")
+script = ExtResource("6_sm")
 initial_state = NodePath("IdleState")
 
 [node name="IdleState" type="Node" parent="StateMachine"]
-script = ExtResource("6_idle")
+script = ExtResource("7_idle")
 
 [node name="MovementState" type="Node" parent="StateMachine"]
-script = ExtResource("7_move")
+script = ExtResource("8_move")
 
 [node name="SprintState" type="Node" parent="StateMachine"]
-script = ExtResource("8_sprint")
+script = ExtResource("9_sprint")
 
 [node name="LightAttackState" type="Node" parent="StateMachine"]
-script = ExtResource("9_atk")
+script = ExtResource("10_atk")
 
 [node name="HeavyAttackState" type="Node" parent="StateMachine"]
-script = ExtResource("10_heavy")
+script = ExtResource("11_heavy")
 
 [node name="ChargedAttackState" type="Node" parent="StateMachine"]
-script = ExtResource("11_charge")
+script = ExtResource("12_charge")
 
 [node name="BlockState" type="Node" parent="StateMachine"]
-script = ExtResource("12_block")
+script = ExtResource("13_block")
 
 [node name="ParryState" type="Node" parent="StateMachine"]
-script = ExtResource("13_parry")
+script = ExtResource("14_parry")
 
 [node name="DodgeState" type="Node" parent="StateMachine"]
-script = ExtResource("14_dodge")
+script = ExtResource("15_dodge")
 
 [node name="AbilityState" type="Node" parent="StateMachine"]
-script = ExtResource("15_ability")
+script = ExtResource("16_ability")
 
 [node name="StunnedState" type="Node" parent="StateMachine"]
-script = ExtResource("16_stun")
+script = ExtResource("17_stun")
 
 [node name="StaggeredState" type="Node" parent="StateMachine"]
-script = ExtResource("17_stagger")
+script = ExtResource("18_stagger")
 
 [node name="KnockedDownState" type="Node" parent="StateMachine"]
-script = ExtResource("18_knockdown")
+script = ExtResource("19_knockdown")
 
 [node name="FinisherState" type="Node" parent="StateMachine"]
-script = ExtResource("19_finisher")
+script = ExtResource("20_finisher")
 
 [node name="DeadState" type="Node" parent="StateMachine"]
-script = ExtResource("20_dead")
+script = ExtResource("21_dead")

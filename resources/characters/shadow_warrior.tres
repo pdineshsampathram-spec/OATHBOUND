@@ -1,6 +1,11 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3 uid="uid://b1d8j6k4v9x3s"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=7 format=3 uid="uid://b1d8j6k4v9x3s"]
 
 [ext_resource type="Script" path="res://scripts/resources/character_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/resources/ability_data.gd" id="2_ab_script"]
+[ext_resource type="Resource" uid="uid://shd1sv8r4v9x1" path="res://resources/abilities/shadow_smoke_veil.tres" id="3_smoke_veil"]
+[ext_resource type="Resource" uid="uid://shd2bs8r4v9x2" path="res://resources/abilities/shadow_blade_storm.tres" id="4_blade_storm"]
+[ext_resource type="Resource" uid="uid://shd3st8r4v9x3" path="res://resources/abilities/shadow_step.tres" id="5_shadow_step"]
+[ext_resource type="Resource" uid="uid://shd4ds8r4v9x4" path="res://resources/abilities/shadow_death_from_shadow.tres" id="6_death_from_shadow"]
 
 [resource]
 script = ExtResource("1_data")
@@ -20,6 +25,8 @@ stamina_regen_delay = 0.6
 sprint_stamina_drain = 14.0
 dodge_stamina_cost = 15.0
 attack_stamina_cost = 10.0
+max_energy = 100.0
+energy_regen_rate = 18.0
 move_speed = 6.8
 sprint_speed = 10.5
 acceleration = 16.0
@@ -64,13 +71,4 @@ finisher_damage = 80.0
 finisher_duration = 1.2
 finisher_range = 2.8
 finisher_health_threshold = 0.25
-ability_name = "Shadow Step"
-ability_description = "Blinks instantly through the shadows 6 meters forward, dealing a devastating backstrike."
-ability_style = 2
-ability_damage = 30.0
-ability_poise_damage = 35.0
-ability_cooldown = 5.0
-ability_cast_time = 0.4
-ability_range = 6.5
-ability_aoe_radius = 2.0
-ability_stamina_cost = 18.0
+abilities = Array[ExtResource("2_ab_script")]([ExtResource("3_smoke_veil"), ExtResource("4_blade_storm"), ExtResource("5_shadow_step"), ExtResource("6_death_from_shadow")])
