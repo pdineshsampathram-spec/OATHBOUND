@@ -1,31 +1,35 @@
-[gd_scene load_steps=5 format=3 uid="uid://cx6r7q8v2p4m1"]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" uid="uid://b1d8j6k4v9x2m" path="res://scenes/arena/blockout_arena.tscn" id="2_arena"]
-[ext_resource type="PackedScene" uid="uid://cx4m8k3q2v1p7" path="res://scenes/test/test_dummy.tscn" id="4_dummy"]
-[ext_resource type="PackedScene" uid="uid://df7k2m5q8w1v9" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
+[ext_resource type="PackedScene" path="res://scenes/arena/medieval_arena.tscn" id="2_arena"]
+[ext_resource type="Script" path="res://scripts/combat/match_manager.gd" id="3_match"]
+[ext_resource type="PackedScene" path="res://scenes/test/test_dummy.tscn" id="4_dummy"]
+[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
-[node name="BlockoutArena" parent="." instance=ExtResource("2_arena")]
+[node name="MedievalCourtyardArena" parent="." instance=ExtResource("2_arena")]
+
+[node name="MatchManager" type="Node" parent="."]
+script = ExtResource("3_match")
 
 [node name="TestDummy" parent="." instance=ExtResource("4_dummy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4)
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 8)
 
 [node name="Spawn2" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0, -10)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0, -8)
 
 [node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 10, 0, 0)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 8, 0, 0)
 
 [node name="Spawn4" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -10, 0, 0)
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -8, 0, 0)
 
 [node name="Spawn5" type="Marker3D" parent="SpawnPoints"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)

@@ -9,6 +9,7 @@ extends Node3D
 @onready var spawner: MultiplayerSpawner = $MultiplayerSpawner
 @onready var spawn_points_container: Node3D = $SpawnPoints
 @onready var combat_hud: CombatHUD = $CombatHUD
+@onready var match_manager: MatchManager = $MatchManager
 
 var spawn_points: Array[Node] = []
 
@@ -17,6 +18,9 @@ func _ready() -> void:
 
 	if spawner:
 		spawner.spawn_function = _custom_spawn_player
+
+	if match_manager and combat_hud:
+		combat_hud.connect_match_manager(match_manager)
 
 	if NetworkManager.is_server():
 		_spawn_all_connected_players()
@@ -54,7 +58,6 @@ func _spawn_player_at_index(p_id: int, spawn_idx: int, c_class: String) -> void:
 	p_node.rotation.y = spawn_rot
 	p_node.sync_character_class = c_class
 	
-	# Load resource directly on server
 	var res: CharacterData = _get_character_resource(c_class)
 	p_node.character_data = res
 

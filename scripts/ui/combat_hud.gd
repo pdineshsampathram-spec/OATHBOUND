@@ -1,7 +1,8 @@
 class_name CombatHUD
 extends CanvasLayer
 
-## Minimal combat HUD displaying Health Bar, Stamina Bar, Poise Bar, Energy Bar, 4 Ability Slots, State, and Network Status.
+## Minimal combat HUD displaying Health Bar, Stamina Bar, Poise Bar, Energy Bar, 4 Ability Slots,
+## Match Timer, Live Warriors Count, Status Banners, and Match Results.
 
 @onready var char_label: Label = $Control/MarginContainer/VBoxContainer/CharLabel
 @onready var health_bar: ProgressBar = $Control/MarginContainer/VBoxContainer/HealthBar
@@ -16,14 +17,29 @@ extends CanvasLayer
 @onready var state_label: Label = $Control/MarginContainer/VBoxContainer/StateLabel
 @onready var network_label: Label = $Control/MarginContainer/VBoxContainer/NetworkLabel
 
+@onready var timer_label: Label = $Control/TopBanner/HBoxContainer/TimerLabel
+@onready var alive_label: Label = $Control/TopBanner/HBoxContainer/AliveLabel
+@onready var status_banner: Label = $Control/CenterBanner/StatusBanner
+@onready var toast_label: Label = $Control/CenterBanner/ToastLabel
+@onready var results_ui: MatchResultsUI = $MatchResultsUI
+
 var target_player: PlayerController = null
+var match_manager: MatchManager = null
 var key_labels: Array[String] = ["[1]", "[2]", "[Q]", "[R]"]
+var _toast_timer: float = 0.0
 
 func _ready() -> void:
 	layer = 10
 	_update_network_status()
+	status_banner.text = ""
+	toast_label.text = ""
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _toast_timer > 0.0:
+		_toast_timer -= delta
+		if _toast_timer <= 0.0:
+			toast_label.text = ""
+
 	if not target_player:
 		return
 
@@ -85,6 +101,70 @@ func connect_player(player: PlayerController) -> void:
 
 	_update_network_status()
 
+func connect_match_manager(mm: MatchManager) -> void:
+	match_manager = mm
+	if not match_manager: return
+
+	match_manager.match_timer_updated.connect(_on_match_timer_updated)
+	match_manager.match_state_changed.connect(_on_match_state_changed)
+	match_manager.match_ended.connect(_on_match_ended)
+
+	if results_ui:
+		results_ui.rematch_requested.connect(func(): match_manager.request_rematch.rpc())
+
+func show_combat_toast(msg: String, color: Color = Color(0.4, 0.9, 1.0)) -> void:
+	if toast_label:
+		toast_label.text = msg
+		toast_label.modulate = color
+		_toast_timer = 1.4
+
+func _on_match_timer_updated(seconds_left: float) -> void:
+	if not timer_label: return
+	if match_manager and match_manager.current_state == MatchManager.MatchState.COUNTDOWN:
+		timer_label.text = "STARTS IN: %d" % int(ceil(seconds_left))
+		status_banner.text = "ROUND STARTS IN %d" % int(ceil(seconds_left))
+		status_banner.modulate = Color(1.0, 0.85, 0.25)
+	else:
+		var mins: int = int(seconds_left) / 60
+		var secs: int = int(seconds_left) % 60
+		timer_label.text = "%02d:%02d" % [mins, secs]
+		if status_banner.text.begins_with("ROUND STARTS"):
+			status_banner.text = "FIGHT!"
+			status_banner.modulate = Color(1.0, 0.3, 0.3)
+			var tween: Tween = create_tween()
+			tween.tween_property(status_banner, "modulate:a", 0.0, 1.5)
+			tween.tween_callback(func(): status_banner.text = "")
+
+	_update_alive_count()
+
+func _update_alive_count() -> void:
+	if not alive_label or not get_parent(): return
+	var p_node: Node = get_parent().get_node_or_null("Players")
+	if p_node:
+		var alive: int = 0
+		var total: int = 0
+		for child in p_node.get_children():
+			if child is PlayerController:
+				total += 1
+				if not child.is_dead:
+					alive += 1
+		alive_label.text = "WARRIORS: %d / %d" % [alive, max(1, total)]
+
+func _on_match_state_changed(new_state: MatchManager.MatchState) -> void:
+	if new_state == MatchManager.MatchState.IN_PROGRESS:
+		status_banner.text = "FIGHT!"
+		status_banner.modulate = Color(1.0, 0.3, 0.3, 1.0)
+		var tween: Tween = create_tween()
+		tween.tween_property(status_banner, "modulate:a", 0.0, 1.5)
+		tween.tween_callback(func(): status_banner.text = "")
+	elif new_state == MatchManager.MatchState.COUNTDOWN:
+		if results_ui:
+			results_ui.visible = false
+
+func _on_match_ended(results: Dictionary) -> void:
+	if results_ui:
+		results_ui.show_results(results)
+
 func _update_network_status() -> void:
 	if not network_label:
 		return
@@ -93,7 +173,7 @@ func _update_network_status() -> void:
 		var count: int = NetworkManager.players.size()
 		network_label.text = "Role: %s | Warriors: %d" % [role, count]
 	else:
-		network_label.text = "Mode: Solo / Local Practice"
+		network_label.text = "Mode: Solo Practice"
 
 func _on_health_changed(curr: float, max_hp: float) -> void:
 	if health_bar:
@@ -108,3 +188,9 @@ func _on_stamina_changed(curr: float, max_stm: float) -> void:
 func _on_state_changed(_prev: String, curr: String) -> void:
 	if state_label:
 		state_label.text = "State: %s" % curr.replace("State", "")
+	if curr == "ParryState":
+		show_combat_toast("PARRY!", Color(0.2, 0.85, 1.0))
+	elif curr == "StaggeredState":
+		show_combat_toast("POISE BROKEN!", Color(1.0, 0.4, 0.2))
+	elif curr == "KnockedDownState":
+		show_combat_toast("KNOCKDOWN!", Color(1.0, 0.2, 0.2))

@@ -7,26 +7,34 @@ extends CharacterBody3D
 
 enum AttackType { LIGHT, HEAVY, CHARGED, CHARGED_KNOCKDOWN, FINISHER }
 
+const CombatAudio = preload("res://scripts/audio/combat_audio.gd")
+const ImpactVFX = preload("res://scripts/vfx/impact_vfx.gd")
+const DamageNumber = preload("res://scripts/ui/damage_number.gd")
+
 @export var character_data: CharacterData = null
 
 @onready var visual_pivot: Node3D = $VisualPivot
-@onready var character_mesh: MeshInstance3D = $VisualPivot/CharacterMesh
-@onready var shield_mesh: MeshInstance3D = $VisualPivot/ShieldMesh
-@onready var left_hand_pivot: Node3D = $VisualPivot/LeftHandPivot
-@onready var sword_pivot: Node3D = $VisualPivot/SwordPivot
-@onready var sword_mesh: MeshInstance3D = $VisualPivot/SwordPivot/SwordMesh
-@onready var axe_mesh: MeshInstance3D = $VisualPivot/SwordPivot/AxeMesh
-@onready var dagger_mesh: MeshInstance3D = $VisualPivot/SwordPivot/DaggerMesh
-@onready var sword_hitbox: Area3D = $VisualPivot/SwordPivot/SwordHitbox
-@onready var sword_collision: CollisionShape3D = $VisualPivot/SwordPivot/SwordHitbox/CollisionShape3D
-@onready var shockwave_mesh: MeshInstance3D = $VisualPivot/ShockwaveMesh
-@onready var barrier_mesh: MeshInstance3D = $VisualPivot/BarrierMesh
+@onready var character_mesh: MeshInstance3D = $VisualPivot.get_node_or_null("CharacterMesh")
+@onready var knight_model: Node3D = $VisualPivot.get_node_or_null("KnightModel")
+@onready var shield_mesh: Node3D = $VisualPivot.get_node_or_null("ShieldMesh")
+@onready var left_hand_pivot: Node3D = $VisualPivot.get_node_or_null("LeftHandPivot")
+@onready var sword_pivot: Node3D = $VisualPivot.get_node_or_null("SwordPivot")
+@onready var sword_mesh: Node3D = $VisualPivot.get_node_or_null("SwordPivot/SwordMesh")
+@onready var axe_mesh: Node3D = $VisualPivot.get_node_or_null("SwordPivot/AxeMesh")
+@onready var dagger_mesh: Node3D = $VisualPivot.get_node_or_null("SwordPivot/DaggerMesh")
+@onready var sword_hitbox: Area3D = $VisualPivot.get_node_or_null("SwordPivot/SwordHitbox")
+@onready var sword_collision: CollisionShape3D = $VisualPivot.get_node_or_null("SwordPivot/SwordHitbox/CollisionShape3D")
+@onready var shockwave_mesh: MeshInstance3D = $VisualPivot.get_node_or_null("ShockwaveMesh")
+@onready var barrier_mesh: MeshInstance3D = $VisualPivot.get_node_or_null("BarrierMesh")
+@onready var combat_audio: CombatAudio = $CombatAudio if has_node("CombatAudio") else null
 @onready var camera_rig: CameraRig = $CameraRig
 @onready var state_machine: StateMachine = $StateMachine
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var stamina_component: StaminaComponent = $StaminaComponent
 @onready var ability_system: AbilitySystem = $AbilitySystem
 @onready var synchronizer: MultiplayerSynchronizer = $MultiplayerSynchronizer
+
+var _anim_player: AnimationPlayer = null
 
 # Network Synchronized Variables (Server -> Clients)
 @export var sync_position: Vector3 = Vector3.ZERO
@@ -608,10 +616,14 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 
 	if is_blocking and block_active_duration <= character_data.parry_window:
 		rpc("rpc_flash_parry")
+		rpc("rpc_spawn_combat_text", global_position + Vector3(0, 1.5, 0), "PARRIED!", Color(0.2, 0.85, 1.0))
 		if state_machine:
 			state_machine.transition_to("ParryState")
 		if attacker and attacker.has_method("trigger_stun"):
 			attacker.trigger_stun()
+		var mm = get_tree().root.find_child("MatchManager", true, false)
+		if mm and mm.has_method("record_parry"):
+			mm.record_parry(peer_id)
 		return 0.0
 
 	var final_damage: float = amount
@@ -640,6 +652,13 @@ func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackT
 
 	if damage_dealt > 0.0:
 		rpc("rpc_flash_hit")
+		var is_heavy: bool = (atk_type == AttackType.HEAVY or atk_type == AttackType.CHARGED or atk_type == AttackType.CHARGED_KNOCKDOWN or atk_type == AttackType.FINISHER)
+		var is_parry_ctr: bool = (attacker is PlayerController and attacker.is_parry_empowered)
+		var is_fin: bool = (atk_type == AttackType.FINISHER)
+		rpc("rpc_spawn_damage_number", global_position + Vector3(0, 1.3, 0), damage_dealt, is_heavy, is_parry_ctr, is_fin)
+		var mm = get_tree().root.find_child("MatchManager", true, false)
+		if mm and attacker is PlayerController and mm.has_method("record_damage"):
+			mm.record_damage(attacker.peer_id, damage_dealt)
 
 	if not is_dead and state_machine:
 		if atk_type == AttackType.CHARGED_KNOCKDOWN:
@@ -656,9 +675,23 @@ func trigger_stun() -> void:
 	if state_machine and not is_dead:
 		state_machine.transition_to("StunnedState")
 
-# --- Procedural Visual Animations & RPCs ---
+# --- Realistic Skeletal Animations & Audio/VFX Hooks ---
+
+func _get_anim_player() -> AnimationPlayer:
+	if _anim_player and is_instance_valid(_anim_player):
+		return _anim_player
+	if knight_model:
+		_anim_player = knight_model.get_node_or_null("AnimationPlayer")
+	return _anim_player
+
+func _play_skeletal_animation(anim_name: String) -> void:
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap and ap.has_animation(anim_name):
+		ap.play(anim_name)
 
 func play_attack_animation() -> void:
+	_play_skeletal_animation("light_attack")
+	if combat_audio: combat_audio.play_sword_swing()
 	if not sword_pivot:
 		return
 	if _attack_tween and _attack_tween.is_valid():
@@ -679,6 +712,8 @@ func play_attack_animation() -> void:
 		l_tween.tween_property(left_hand_pivot, "rotation:y", 0.0, 0.2)
 
 func play_heavy_attack_animation() -> void:
+	_play_skeletal_animation("heavy_attack")
+	if combat_audio: combat_audio.play_sword_swing()
 	if not sword_pivot:
 		return
 	if _attack_tween and _attack_tween.is_valid():
@@ -693,6 +728,7 @@ func play_heavy_attack_animation() -> void:
 	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", 0.0, 0.35)
 
 func play_charge_buildup_animation() -> void:
+	_play_skeletal_animation("idle")
 	if not sword_pivot:
 		return
 	if _charge_tween and _charge_tween.is_valid():
@@ -704,6 +740,8 @@ func play_charge_buildup_animation() -> void:
 	_charge_tween.parallel().tween_property(visual_pivot, "scale", Vector3(1.08, 1.08, 1.08), 0.4)
 
 func play_charged_attack_release_animation(_ratio: float) -> void:
+	_play_skeletal_animation("heavy_attack")
+	if combat_audio: combat_audio.play_sword_swing()
 	stop_charge_visual()
 	if not sword_pivot:
 		return
@@ -723,6 +761,10 @@ func stop_charge_visual() -> void:
 		visual_pivot.scale = Vector3.ONE
 
 func play_parry_success_animation() -> void:
+	_play_skeletal_animation("parry")
+	ImpactVFX.spawn_parry_flash(self, global_position + Vector3(0, 1.2, 0.4))
+	if combat_audio: combat_audio.play_parry()
+
 	if shield_mesh and shield_mesh.visible:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tween.tween_property(shield_mesh, "position:z", -0.6, 0.1)
@@ -733,6 +775,9 @@ func play_parry_success_animation() -> void:
 		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.25)
 
 func play_dodge_animation() -> void:
+	_play_skeletal_animation("dodge")
+	ImpactVFX.spawn_dodge_dust(self, global_position)
+	if combat_audio: combat_audio.play_dodge()
 	if not visual_pivot:
 		return
 	if _dodge_tween and _dodge_tween.is_valid():
@@ -743,6 +788,11 @@ func play_dodge_animation() -> void:
 	_dodge_tween.tween_callback(func(): visual_pivot.rotation.x = 0.0)
 
 func set_guard_visual(active: bool) -> void:
+	if active:
+		_play_skeletal_animation("block")
+	else:
+		_play_skeletal_animation("idle")
+
 	if shield_mesh and shield_mesh.visible:
 		var target_z: float = -0.4 if active else -0.2
 		var target_rot_y: float = deg_to_rad(-15.0) if active else 0.0
@@ -910,6 +960,13 @@ func _on_remote_state_changed(_prev: String, current: String) -> void:
 
 @rpc("call_local", "unreliable")
 func rpc_flash_hit() -> void:
+	ImpactVFX.spawn_hit_sparks(self, global_position + Vector3(0, 1.1, 0), false)
+	if combat_audio: combat_audio.play_weapon_impact(false)
+	_play_skeletal_animation("hit_reaction")
+	if is_local_player and camera_rig and camera_rig.has_node("SpringArm3D/Camera3D"):
+		var cam: Camera3D = camera_rig.get_node("SpringArm3D/Camera3D")
+		if cam.has_method("trigger_hit_shake"):
+			cam.trigger_hit_shake(false)
 	if character_mesh and character_mesh.material_override:
 		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
 		if mat:
@@ -921,17 +978,27 @@ func rpc_flash_hit() -> void:
 
 @rpc("call_local", "unreliable")
 func rpc_flash_shield() -> void:
-	if shield_mesh and shield_mesh.material_override:
-		var mat: StandardMaterial3D = shield_mesh.material_override as StandardMaterial3D
-		if mat:
-			var orig_color: Color = mat.albedo_color
-			mat.albedo_color = Color(0.3, 0.7, 1.0, 1.0)
-			await get_tree().create_timer(0.08).timeout
+	if combat_audio: combat_audio.play_block()
+	if shield_mesh and shield_mesh.get_child_count() > 0:
+		var s_mesh: Node = shield_mesh.get_child(0)
+		if s_mesh is MeshInstance3D and s_mesh.material_override:
+			var mat: StandardMaterial3D = s_mesh.material_override as StandardMaterial3D
 			if mat:
-				mat.albedo_color = orig_color
+				var orig_color: Color = mat.albedo_color
+				mat.albedo_color = Color(0.3, 0.7, 1.0, 1.0)
+				await get_tree().create_timer(0.08).timeout
+				if mat:
+					mat.albedo_color = orig_color
 
 @rpc("call_local", "unreliable")
 func rpc_flash_parry() -> void:
+	ImpactVFX.spawn_parry_flash(self, global_position + Vector3(0, 1.2, 0.3))
+	if combat_audio: combat_audio.play_parry()
+	_play_skeletal_animation("parry")
+	if is_local_player and camera_rig and camera_rig.has_node("SpringArm3D/Camera3D"):
+		var cam: Camera3D = camera_rig.get_node("SpringArm3D/Camera3D")
+		if cam.has_method("trigger_parry_jolt"):
+			cam.trigger_parry_jolt()
 	if character_mesh and character_mesh.material_override:
 		var mat: StandardMaterial3D = character_mesh.material_override as StandardMaterial3D
 		if mat:
@@ -940,3 +1007,20 @@ func rpc_flash_parry() -> void:
 			await get_tree().create_timer(0.15).timeout
 			if mat:
 				mat.albedo_color = orig_color
+
+@rpc("call_local", "unreliable")
+func rpc_spawn_damage_number(spawn_pos: Vector3, dmg_amount: float, is_heavy: bool, is_parry_ctr: bool, is_fin: bool) -> void:
+	var color: Color = Color(1.0, 0.95, 0.8)
+	if is_fin:
+		color = Color(1.0, 0.15, 0.15)
+	elif is_parry_ctr:
+		color = Color(0.2, 0.85, 1.0)
+	elif is_heavy:
+		color = Color(1.0, 0.55, 0.1)
+	DamageNumber.spawn(self, spawn_pos, "%.0f" % dmg_amount, color, is_heavy or is_fin)
+
+@rpc("call_local", "unreliable")
+func rpc_spawn_combat_text(spawn_pos: Vector3, txt: String, color: Color) -> void:
+	DamageNumber.spawn(self, spawn_pos, txt, color, true)
+
+

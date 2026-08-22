@@ -4,7 +4,7 @@ extends Node
 ## Abstract base State class for OATHBOUND StateMachine architecture.
 
 var state_machine: Node = null
-var character: CharacterBody3D = null
+var character = null
 
 func enter(_msg: Dictionary = {}) -> void:
 	pass
