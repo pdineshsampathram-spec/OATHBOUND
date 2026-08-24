@@ -14,6 +14,9 @@ const DISSOLUTION_SHADER = preload("res://assets/materials/dissolution_shader.gd
 const ENERGY_FLARE_SHADER = preload("res://assets/materials/energy_flare.gdshader")
 const DENSE_PLASMA_SHADER = preload("res://assets/materials/dense_plasma_column.gdshader")
 const ATMOSPHERIC_SHOCK_SHADER = preload("res://assets/materials/atmospheric_shock_distortion.gdshader")
+const SKY_BLOOM_SHADER = preload("res://assets/materials/cataclysm_sky_bloom.gdshader")
+const RADIAL_FIREBALL_SHADER = preload("res://assets/materials/radial_detonation_fireball.gdshader")
+const GROUND_BLAST_SHADER = preload("res://assets/materials/cataclysm_ground_blast.gdshader")
 
 # 24 Dedicated Blender Hero Assets
 const AURA_RIBBON_PRIMARY = preload("res://assets/ultimate/blender/aura_ribbon_primary.glb")
@@ -29,12 +32,17 @@ const SHOCKWAVE_SECONDARY_SCENE = preload("res://assets/ultimate/blender/shockwa
 const SKY_SPIRAL_SCENE = preload("res://assets/ultimate/blender/sky_energy_spiral.glb")
 const AFTERSHOCK_SCENE = preload("res://assets/ultimate/blender/aftershock_energy.glb")
 
-# Breakthrough Living Plasma Hero Assets
+# Breakthrough & Detonation Hero Assets
 const CATACLYSM_ENERGY_COLUMN = preload("res://assets/ultimate/blender/cataclysm_energy_column.glb")
 const PLAYER_TO_SKY_STREAM = preload("res://assets/ultimate/blender/player_to_sky_energy_stream.glb")
 const SKY_CELESTIAL_ARCS = preload("res://assets/ultimate/blender/sky_celestial_arcs.glb")
 const ATMOSPHERIC_BLAST_WAVE = preload("res://assets/ultimate/blender/atmospheric_blast_wave.glb")
 const SKY_CATACLYSM_BURST = preload("res://assets/ultimate/blender/sky_cataclysm_burst.glb")
+const CATACLYSM_GROUND_BLAST = preload("res://assets/ultimate/blender/cataclysm_ground_blast.glb")
+const CATACLYSM_SKY_BLOOM = preload("res://assets/ultimate/blender/cataclysm_sky_bloom.glb")
+const CATACLYSM_RADIAL_FIREBALL = preload("res://assets/ultimate/blender/cataclysm_radial_fireball.glb")
+const CATACLYSM_DEBRIS_CLUSTER = preload("res://assets/ultimate/blender/cataclysm_debris_cluster.glb")
+
 
 # Supernatural Color Palette
 const COLOR_VOID_DARK: Color = Color(0.06, 0.01, 0.12, 0.95)
@@ -429,19 +437,20 @@ func _update_19_shot_cinematic_camera(real_delta: float) -> void:
 		var end_cam = k_pos + Vector3(-0.2, 1.45, 1.75)
 		desired_cam = start_cam.lerp(end_cam, p)
 
-	# Shot 12: Rapid Pull-Back Wide: 3D Cataclysmic Detonation (33.5s - 35.0s)
-	elif _sequence_time < 35.0:
-		var p = (_sequence_time - 33.5) / 1.5
+	# Shot 12: Iconic Signature Extreme Wide Detonation Shot (33.5s - 36.5s)
+	# Frames Knight at epicenter, radial ground rupture, 3D atmospheric pressure wave, vertical eruption, 80m sky bloom, and fortress arena simultaneously!
+	elif _sequence_time < 36.5:
+		var p = (_sequence_time - 33.5) / 3.0
 		_cinematic_camera.fov = 78.0
-		var shake = Vector3(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2), randf_range(-0.2, 0.2)) * (1.0 - p)
-		look_target = k_pos + Vector3(0, 1.5, 0)
-		var start_cam = k_pos + Vector3(4.5, 3.5, 7.5)
-		var end_cam = k_pos + Vector3(7.5, 5.2, 12.5)
+		var shake = Vector3(randf_range(-0.35, 0.35), randf_range(-0.25, 0.25), randf_range(-0.35, 0.35)) * maxf(0.0, 1.0 - p * 1.2)
+		look_target = k_pos + Vector3(0, 3.5, 0)
+		var start_cam = k_pos + Vector3(5.0, 4.0, 8.5)
+		var end_cam = k_pos + Vector3(10.5, 7.8, 16.5)
 		desired_cam = start_cam.lerp(end_cam, p) + shake
 
-	# Shot 13: Release Wave Visibly Hits Enemies (35.0s - 37.5s)
-	elif _sequence_time < 37.5:
-		var p = (_sequence_time - 35.0) / 2.5
+	# Shot 13: Release Wave Visibly Hits Enemies (36.5s - 38.5s)
+	elif _sequence_time < 38.5:
+		var p = (_sequence_time - 36.5) / 2.0
 		_cinematic_camera.fov = 52.0
 		if hero_enemy and is_instance_valid(hero_enemy):
 			var e_pos = hero_enemy.global_position
@@ -452,6 +461,7 @@ func _update_19_shot_cinematic_camera(real_delta: float) -> void:
 		else:
 			look_target = k_pos + Vector3(0, 1.2, -3.5)
 			desired_cam = k_pos + Vector3(3.5, 2.2, 2.5)
+
 
 	# Shot 14: Existing High-Quality Enemy Vaporization Payoff (37.5s - 41.0s)
 	elif _sequence_time < 41.0:
@@ -669,9 +679,19 @@ func _update_particle_families() -> void:
 		_body_seams_particles.emitting = power_level > 0.08 and _sequence_time < 47.0
 
 
-## --- GOD-TIER 3D CATASTROPHIC RELEASE (GROUND + AIR + SKY) (+33.5s) ---
+## --- GOD-TIER 3D CATASTROPHIC RADIAL DETONATION (GROUND + AIR + SKY) (+33.5s) ---
 func _execute_god_tier_release() -> void:
 	_is_released = true
+
+	# 0. HIDE / DELETE THE OLD COLUMN & RIBBONS DURING CLIMAX (NO STACKED RIBBONS)
+	if is_instance_valid(_energy_column_instance):
+		_energy_column_instance.visible = false
+	if is_instance_valid(_aura_filaments_p_instance):
+		_aura_filaments_p_instance.visible = false
+	if is_instance_valid(_aura_filaments_s_instance):
+		_aura_filaments_s_instance.visible = false
+	if is_instance_valid(_player_to_sky_instance):
+		_player_to_sky_instance.visible = false
 
 	# Knight drives blade downward into earth with massive crushing momentum
 	_knight._play_skeletal_animation("ultimate_release", 0.04)
@@ -685,77 +705,128 @@ func _execute_god_tier_release() -> void:
 
 	var parent_node: Node = _knight.get_parent()
 
-	# 1. MULTI-ELEMENT 0.12s CONTROLLED IMPACT FLASH (Sky + Directional Sun + Local Omni Bounce)
+	# 1. LAYER 1: MULTI-ELEMENT 0.08s CONTROLLED IMPACT FLASH (Sky + Directional Sun + Local Omni Bounce)
 	if _sky_vortex_mat:
-		_sky_vortex_mat.set_shader_parameter("sky_flash_intensity", 3.8)
+		_sky_vortex_mat.set_shader_parameter("sky_flash_intensity", 4.5)
 		var tw_sky_flash: Tween = create_tween()
-		tw_sky_flash.tween_property(_sky_vortex_mat, "shader_parameter/sky_flash_intensity", 0.0, 0.18)
+		tw_sky_flash.tween_property(_sky_vortex_mat, "shader_parameter/sky_flash_intensity", 0.0, 0.12)
 
 	if _directional_sun and is_instance_valid(_directional_sun):
 		var tw_sun: Tween = create_tween()
-		tw_sun.tween_property(_directional_sun, "light_energy", 2.6, 0.06)
-		tw_sun.tween_property(_directional_sun, "light_energy", 0.12, 0.18)
+		tw_sun.tween_property(_directional_sun, "light_energy", 3.2, 0.05)
+		tw_sun.tween_property(_directional_sun, "light_energy", 0.10, 0.12)
 
-	# Localized omni bounce at sword hilt (bright, short-lived, no flat wash)
 	var sword_flash_light: OmniLight3D = OmniLight3D.new()
 	sword_flash_light.light_color = COLOR_VOID_CORE
-	sword_flash_light.light_energy = 4.8
-	sword_flash_light.omni_range = 14.0
+	sword_flash_light.light_energy = 5.5
+	sword_flash_light.omni_range = 16.0
 	_knight.add_child(sword_flash_light)
 	sword_flash_light.position = Vector3(0, 0.8, 0)
 	var tw_flash_omni: Tween = create_tween()
-	tw_flash_omni.tween_property(sword_flash_light, "light_energy", 0.0, 0.14)
+	tw_flash_omni.tween_property(sword_flash_light, "light_energy", 0.0, 0.10)
 	tw_flash_omni.tween_callback(sword_flash_light.queue_free)
 
-	# 2. CELESTIAL SKY CATACLYSM PROPAGATION (SKY)
-	_spawn_celestial_sky_pillar()
-	if SKY_CATACLYSM_BURST and parent_node:
-		var sky_burst: Node3D = SKY_CATACLYSM_BURST.instantiate() as Node3D
-		if sky_burst:
-			_apply_shader_material_to_node(sky_burst, ENERGY_RIBBON_SHADER, {
+	# 2. LAYER 2: RAPID RADIAL FIREBALL (High-Velocity Outward Expansion, Hollow Center)
+	if CATACLYSM_RADIAL_FIREBALL and parent_node:
+		var fireball: Node3D = CATACLYSM_RADIAL_FIREBALL.instantiate() as Node3D
+		if fireball:
+			_apply_shader_material_to_node(fireball, RADIAL_FIREBALL_SHADER, {
 				"core_color": COLOR_VOID_CORE,
-				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 4.2,
-				"fresnel_power": 1.6
+				"rim_color": COLOR_VOID_PRIMARY,
+				"expansion_phase": 0.0,
+				"emission_strength": 12.0
 			})
-			parent_node.add_child(sky_burst)
-			sky_burst.global_position = _knight.global_position + Vector3(0, 38.0, 0)
-			_temp_vfx_nodes.append(sky_burst)
-			var tw_sky: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw_sky.tween_property(sky_burst, "scale", Vector3(95.0, 1.0, 95.0), 1.8)
+			parent_node.add_child(fireball)
+			fireball.global_position = _knight.global_position + Vector3(0, 1.0, 0)
+			fireball.scale = Vector3(0.5, 0.5, 0.5)
+			_temp_vfx_nodes.append(fireball)
+			
+			var tw_fb: Tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+			tw_fb.tween_property(fireball, "scale", Vector3(26.0, 18.0, 26.0), 0.65)
+			
+			var fb_mat: ShaderMaterial = _get_shader_material_from_node(fireball)
+			if fb_mat:
+				var tw_fb_mat: Tween = create_tween()
+				tw_fb_mat.tween_property(fb_mat, "shader_parameter/expansion_phase", 1.0, 0.65)
+				tw_fb_mat.tween_callback(fireball.queue_free)
 
-	# 3. ATMOSPHERIC PRESSURE BLAST WAVE (AIR / DUST / SHOCK FRONT)
+	# 3. LAYER 3: GROUND RUPTURE BLAST (FRACTURED STONE CRUST & OUTWARD DEBRIS)
+	if CATACLYSM_GROUND_BLAST and parent_node:
+		var ground_blast: Node3D = CATACLYSM_GROUND_BLAST.instantiate() as Node3D
+		if ground_blast:
+			_apply_shader_material_to_node(ground_blast, GROUND_BLAST_SHADER, {
+				"fissure_color": COLOR_VOID_CORE,
+				"magma_purple": COLOR_VOID_PRIMARY,
+				"crack_glow_energy": 16.0,
+				"rupture_phase": 0.0
+			})
+			parent_node.add_child(ground_blast)
+			ground_blast.global_position = _knight.global_position + Vector3(0, 0.02, 0)
+			ground_blast.scale = Vector3(0.2, 1.0, 0.2)
+			_temp_vfx_nodes.append(ground_blast)
+			
+			var tw_gb: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw_gb.tween_property(ground_blast, "scale", Vector3(2.8, 1.0, 2.8), 1.2)
+			
+			var gb_mat: ShaderMaterial = _get_shader_material_from_node(ground_blast)
+			if gb_mat:
+				var tw_gb_mat: Tween = create_tween()
+				tw_gb_mat.tween_property(gb_mat, "shader_parameter/rupture_phase", 1.0, 1.5)
+
+	# 4. LAYER 4 & 5: 3D ATMOSPHERIC BLAST WAVE & DEBRIS CLUSTER (AIR / FOG DISPLACEMENT / RUBBLE)
 	if ATMOSPHERIC_BLAST_WAVE and parent_node:
 		var air_wave: Node3D = ATMOSPHERIC_BLAST_WAVE.instantiate() as Node3D
 		if air_wave:
 			_apply_shader_material_to_node(air_wave, ATMOSPHERIC_SHOCK_SHADER, {
 				"shock_color": Color(0.85, 0.65, 1.0, 0.8),
 				"highlight_color": COLOR_VOID_CORE,
-				"distortion_intensity": 3.0
+				"distortion_intensity": 3.2
 			})
 			parent_node.add_child(air_wave)
 			air_wave.global_position = _knight.global_position + Vector3(0, 1.2, 0)
 			_temp_vfx_nodes.append(air_wave)
 			var tw_air: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw_air.tween_property(air_wave, "scale", Vector3(65.0, 10.0, 65.0), 1.4)
+			tw_air.tween_property(air_wave, "scale", Vector3(85.0, 14.0, 85.0), 1.4)
 
-	# 4. GROUND PROPAGATION (EARTH FRACTURE & 100M SHOCKWAVE)
-	if SHOCKWAVE_PRIMARY_SCENE and parent_node:
-		var shockwave: Node3D = SHOCKWAVE_PRIMARY_SCENE.instantiate() as Node3D
-		if shockwave:
-			_apply_shader_material_to_node(shockwave, ENERGY_RIBBON_SHADER, {
+	# Radial Masonry Debris Particle Ejection
+	if _ground_debris_particles:
+		_ground_debris_particles.amount = 180
+		_ground_debris_particles.explosiveness = 0.95
+		_ground_debris_particles.emitting = true
+
+	# 5. LAYER 6: VERTICAL STRATOSPHERIC ERUPTION (CONSEQUENCE OF DETONATION, OCCURS +0.2s AFTER FLASH)
+	var vert_timer: SceneTreeTimer = get_tree().create_timer(0.20, true, false, true)
+	vert_timer.timeout.connect(func():
+		if not _is_active or not is_instance_valid(_knight):
+			return
+		_spawn_celestial_sky_pillar()
+	)
+
+	# 6. LAYER 7: GIGANTIC STRATOSPHERIC SKY BLOOM (80m BILLOWING SUPERNATURAL CLOUD)
+	if CATACLYSM_SKY_BLOOM and parent_node:
+		var sky_bloom: Node3D = CATACLYSM_SKY_BLOOM.instantiate() as Node3D
+		if sky_bloom:
+			_apply_shader_material_to_node(sky_bloom, SKY_BLOOM_SHADER, {
 				"core_color": COLOR_VOID_CORE,
-				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 3.2,
-				"fresnel_power": 1.5
+				"mid_color": COLOR_VOID_PRIMARY,
+				"outer_color": Color(0.12, 0.02, 0.28, 0.75),
+				"bloom_growth": 0.0,
+				"emission_energy": 5.5
 			})
-			parent_node.add_child(shockwave)
-			shockwave.global_position = _knight.global_position
-			_temp_vfx_nodes.append(shockwave)
-			var tw: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw.tween_property(shockwave, "scale", Vector3(70.0, 5.0, 70.0), 1.4)
+			parent_node.add_child(sky_bloom)
+			sky_bloom.global_position = _knight.global_position + Vector3(0, 32.0, 0)
+			sky_bloom.scale = Vector3(0.5, 0.5, 0.5)
+			_temp_vfx_nodes.append(sky_bloom)
+			
+			var tw_bloom: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw_bloom.tween_property(sky_bloom, "scale", Vector3(2.2, 1.5, 2.2), 3.2)
+			
+			var bloom_mat: ShaderMaterial = _get_shader_material_from_node(sky_bloom)
+			if bloom_mat:
+				var tw_bmat: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tw_bmat.tween_property(bloom_mat, "shader_parameter/bloom_growth", 1.0, 2.5)
 
-	# Secondary Aftershock Pulse (+8.0s post-release, t = 41.5s)
+	# 7. LAYER 9: SECONDARY AFTERSHOCK PULSE (+8.0s post-release, t = 41.5s)
 	var aftershock_timer: SceneTreeTimer = get_tree().create_timer(8.0, true, false, true)
 	aftershock_timer.timeout.connect(func():
 		if not _is_active or not is_instance_valid(_knight):
@@ -775,6 +846,7 @@ func _execute_god_tier_release() -> void:
 				var tw2: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 				tw2.tween_property(aftershock, "scale", Vector3(85.0, 4.0, 85.0), 1.5)
 	)
+
 
 ## --- SPATIAL CAUSALITY: SHOCKWAVE IMPACTS INDIVIDUAL ENEMY ---
 func _impact_single_enemy(target: PlayerController) -> void:
@@ -1276,3 +1348,16 @@ func _apply_shader_material_to_node(root_node: Node, shader_res: Shader, params:
 		var mi: MeshInstance3D = m as MeshInstance3D
 		if mi:
 			mi.material_override = mat
+
+func _get_shader_material_from_node(root_node: Node) -> ShaderMaterial:
+	if not root_node:
+		return null
+	var meshes: Array[Node] = root_node.find_children("*", "MeshInstance3D", true, false)
+	if root_node is MeshInstance3D:
+		meshes.append(root_node)
+	for m in meshes:
+		var mi: MeshInstance3D = m as MeshInstance3D
+		if mi and mi.material_override is ShaderMaterial:
+			return mi.material_override as ShaderMaterial
+	return null
+

@@ -492,6 +492,122 @@ def create_cataclysm_energy_column(path):
     
     export_asset(col_obj, path)
 
+# --- 6. DETONATION EVENT HERO ASSETS (GROUND BLAST, SKY BLOOM, RADIAL FIREBALL, DEBRIS) ---
+def create_cataclysm_ground_blast(path):
+    reset_blend()
+    objs = []
+    # 1. Jagged Fractured Stone Crust with 24 radial sectors
+    for i in range(24):
+        ang1 = (i / 24.0) * math.pi * 2.0
+        ang2 = ((i + 1) / 24.0) * math.pi * 2.0
+        r_inner = 0.8 + (math.sin(i * 3.7) * 0.3)
+        r_outer = 14.0 + (math.cos(i * 2.3) * 4.5)
+        
+        mesh = bpy.data.meshes.new(f"GroundSlab_{i}")
+        verts = [
+            Vector((math.cos(ang1) * r_inner, math.sin(ang1) * r_inner, 0.02)),
+            Vector((math.cos(ang2) * r_inner, math.sin(ang2) * r_inner, 0.02)),
+            Vector((math.cos(ang2) * r_outer, math.sin(ang2) * r_outer, -0.05 + math.sin(i * 1.5) * 0.15)),
+            Vector((math.cos(ang1) * r_outer, math.sin(ang1) * r_outer, -0.05 + math.cos(i * 1.5) * 0.15))
+        ]
+        faces = [(0, 1, 2, 3)]
+        mesh.from_pydata(verts, [], faces)
+        mesh.update()
+        obj = bpy.data.objects.new(f"GroundSlabObj_{i}", mesh)
+        bpy.context.collection.objects.link(obj)
+        objs.append(obj)
+
+    # 2. Outer Ejected Crater Rubble
+    for j in range(16):
+        r = 6.0 + (j * 0.7)
+        ang = j * 1.618 * math.pi * 2.0
+        bpy.ops.mesh.primitive_cube_add(size=0.6, location=(math.cos(ang) * r, math.sin(ang) * r, 0.15))
+        rubble = bpy.context.active_object
+        rubble.rotation_euler = (math.sin(j), math.cos(j), j * 0.5)
+        rubble.scale = Vector((0.8, 1.2, 0.4))
+        objs.append(rubble)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    ground_obj = bpy.context.active_object
+    ground_obj.name = "CataclysmGroundBlast"
+    m = bpy.data.materials.new(name="GroundBlastMat")
+    ground_obj.data.materials.append(m)
+    export_asset(ground_obj, path)
+
+def create_cataclysm_sky_bloom(path):
+    reset_blend()
+    objs = []
+    # 8 Irregular Bilateral Stratospheric Expansion Lobes (80m x 80m canopy across Z = 45m to 65m)
+    lobe_configs = [
+        (0.0, 0.0, 52.0, 18.0, 12.0, 7.0),
+        (18.0, 12.0, 56.0, 22.0, 16.0, 9.0),
+        (-22.0, 14.0, 58.0, 24.0, 18.0, 10.0),
+        (-14.0, -20.0, 54.0, 20.0, 15.0, 8.0),
+        (24.0, -16.0, 60.0, 26.0, 20.0, 11.0),
+        (32.0, 8.0, 62.0, 20.0, 14.0, 8.0),
+        (-30.0, -8.0, 64.0, 22.0, 16.0, 9.0),
+        (0.0, 28.0, 59.0, 25.0, 19.0, 10.0)
+    ]
+    for idx, (x, y, z, rx, ry, rz) in enumerate(lobe_configs):
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=1.0, location=(x, y, z))
+        lobe = bpy.context.active_object
+        lobe.scale = Vector((rx, ry, rz))
+        bpy.ops.object.transform_apply(scale=True)
+        # Apply fractal organic vertex noise
+        for v in lobe.data.vertices:
+            disp = math.sin(v.co.x * 0.25) * math.cos(v.co.y * 0.25) * math.sin(v.co.z * 0.3) * 2.5
+            v.co += v.normal * disp
+        objs.append(lobe)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    bloom_obj = bpy.context.active_object
+    bloom_obj.name = "CataclysmSkyBloom"
+    m = bpy.data.materials.new(name="SkyBloomMat")
+    bloom_obj.data.materials.append(m)
+    export_asset(bloom_obj, path)
+
+def create_cataclysm_radial_fireball(path):
+    reset_blend()
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=4, radius=3.5, location=(0, 0, 1.2))
+    fb_obj = bpy.context.active_object
+    # Deform into turbulent expanding plasma shell
+    for v in fb_obj.data.vertices:
+        ang_h = math.atan2(v.co.y, v.co.x)
+        ang_v = math.atan2(v.co.z - 1.2, math.sqrt(v.co.x**2 + v.co.y**2))
+        noise = math.sin(ang_h * 5.0) * math.cos(ang_v * 4.0) * 0.8
+        v.co += v.normal * noise
+    fb_obj.name = "CataclysmRadialFireball"
+    m = bpy.data.materials.new(name="RadialFireballMat")
+    fb_obj.data.materials.append(m)
+    export_asset(fb_obj, path)
+
+def create_cataclysm_debris_cluster(path):
+    reset_blend()
+    objs = []
+    for i in range(12):
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.35, location=(math.sin(i)*2.0, math.cos(i)*2.0, 0.5))
+        d = bpy.context.active_object
+        d.scale = Vector((0.5 + (i % 3)*0.4, 0.4, 0.8 + (i % 2)*0.5))
+        objs.append(d)
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    deb_obj = bpy.context.active_object
+    deb_obj.name = "CataclysmDebrisCluster"
+    m = bpy.data.materials.new(name="DebrisClusterMat")
+    deb_obj.data.materials.append(m)
+    export_asset(deb_obj, path)
+
 # --- 3. ATMOSPHERIC BLAST WAVE (3D LAYERED SHOCK FRONT) ---
 def create_atmospheric_blast_wave(path):
     reset_blend()
@@ -541,6 +657,7 @@ def create_sky_cataclysm_burst(path):
     burst_obj.data.materials.append(m)
     export_asset(burst_obj, path)
 
+
 def main():
     project_root = "/Users/ramteja/Documents/Blender exp game"
     lib_dir = os.path.join(project_root, "assets", "ultimate", "blender")
@@ -577,6 +694,12 @@ def main():
     create_sky_celestial_arcs(os.path.join(lib_dir, "sky_celestial_arcs.glb"))
     create_atmospheric_blast_wave(os.path.join(lib_dir, "atmospheric_blast_wave.glb"))
     create_sky_cataclysm_burst(os.path.join(lib_dir, "sky_cataclysm_burst.glb"))
+    
+    # 5. DETONATION EVENT HERO ASSETS (GROUND BLAST, SKY BLOOM, RADIAL FIREBALL, DEBRIS)
+    create_cataclysm_ground_blast(os.path.join(lib_dir, "cataclysm_ground_blast.glb"))
+    create_cataclysm_sky_bloom(os.path.join(lib_dir, "cataclysm_sky_bloom.glb"))
+    create_cataclysm_radial_fireball(os.path.join(lib_dir, "cataclysm_radial_fireball.glb"))
+    create_cataclysm_debris_cluster(os.path.join(lib_dir, "cataclysm_debris_cluster.glb"))
 
 
     # Also keep vfx dir aliases in sync
