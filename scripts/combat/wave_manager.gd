@@ -135,10 +135,13 @@ func _on_enemy_died(enemy: PlayerController) -> void:
 
 	# Cleanup dead enemy body after brief death animation
 	var timer: SceneTreeTimer = get_tree().create_timer(3.0)
+	var weak_enemy = weakref(enemy)
 	timer.timeout.connect(func():
-		if is_instance_valid(enemy):
-			enemy.queue_free()
+		var ref = weak_enemy.get_ref()
+		if ref and is_instance_valid(ref) and not ref.is_queued_for_deletion():
+			ref.queue_free()
 	)
+
 
 	# Practice mode: respawn continuously
 	if mode == GameMode.PRACTICE_SOLO:

@@ -19,22 +19,25 @@ extends SceneTree
 var test_scene: Node3D = null
 var knight: PlayerController = null
 var director: Node = null
-var output_dir: String = "/Users/ramteja/.gemini/antigravity-ide/brain/9e282b9a-7562-4985-83bc-555bb997215c/screenshots"
+var output_dir: String = "/Users/ramteja/.gemini/antigravity-ide/brain/db078232-4075-4906-afa0-98e89787b4ad/screenshots"
+var docs_dir: String = "/Users/ramteja/Documents/Blender exp game/docs/screenshots"
 
 var capture_schedule: Array[Dictionary] = [
-	{ "time": 2.0, "name": "01_awakening_preparation.png", "desc": "Awakening & Initial Tension" },
-	{ "time": 6.0, "name": "02_power_buildup_world_responds.png", "desc": "Power Buildup & Dust/Torch Response" },
-	{ "time": 12.0, "name": "03_battlefield_pressure_ground_cracks.png", "desc": "Battlefield Pressure & Ground Veins" },
-	{ "time": 17.0, "name": "04_sword_ascension_anti_gravity_rubble.png", "desc": "Sword Ascension & Floating Rubble" },
-	{ "time": 22.0, "name": "05_arena_submission_sky_dominance.png", "desc": "Arena Submission & Sky Vortex" },
-	{ "time": 25.0, "name": "06_enemy_terror_stasis.png", "desc": "Enemy Terror & Stasis Acting" },
-	{ "time": 29.0, "name": "07_enemy_vaporization_inward_suction.png", "desc": "Enemy Physical Breakdown & Inward Suction" },
-	{ "time": 33.0, "name": "08_zenith_energy_compression.png", "desc": "Zenith Compression & Breathless Silence" },
-	{ "time": 34.5, "name": "09_cataclysmic_detonation_sky_pillar.png", "desc": "Cataclysmic Detonation & 65m Sky Pillar" },
-	{ "time": 37.0, "name": "10_traveling_shockwave_front.png", "desc": "Traveling 100m Shockwave Front" },
-	{ "time": 40.0, "name": "11_atmospheric_aftermath_scarred_sky.png", "desc": "Atmospheric Aftermath & Scarred Sky" },
-	{ "time": 45.0, "name": "12_hero_victory_portrait.png", "desc": "Hero Victory Portrait & Title Card" }
+	{ "time": 2.0, "name": "01_hilt_macro_awakening.png", "desc": "Hand/Hilt Macro & Awakening" },
+	{ "time": 4.0, "name": "02_helmet_visor_reveal.png", "desc": "Helmet & Visor Front Reveal" },
+	{ "time": 6.5, "name": "03_hero_upward_filaments.png", "desc": "Hero Upward Angle & Rising Filaments" },
+	{ "time": 10.0, "name": "04_sweeping_orbit_power_rise.png", "desc": "180° Sweeping Orbit & Power Rise" },
+	{ "time": 14.5, "name": "05_player_to_sky_energy_ascension.png", "desc": "Knight -> Sword -> Player-To-Sky Energy Ascension" },
+	{ "time": 18.5, "name": "06_sword_zenith_celestial_stream.png", "desc": "Vertical Celestial Energy Column & Arcs" },
+	{ "time": 21.5, "name": "07_aerial_fortress_panorama.png", "desc": "High Aerial 100m Fortress & Sky Vortex" },
+	{ "time": 24.5, "name": "08_enemy_terror_stasis.png", "desc": "Enemy Terror Front Close-Up in Stasis" },
+	{ "time": 30.0, "name": "09_enemy_vaporization_suction.png", "desc": "Dedicated Enemy Vaporization & Inward Suction" },
+	{ "time": 34.2, "name": "10_3d_cataclysm_release_ground_air_sky.png", "desc": "3D Cataclysm Release: Ground + Atmosphere + Sky" },
+	{ "time": 37.5, "name": "11_100m_shockwave_sky_eruption.png", "desc": "100m Shockwave & Sky Eruption" },
+	{ "time": 41.0, "name": "12_aftermath_lingering_embers.png", "desc": "Aftermath & Lingering Celestial Aura" },
+	{ "time": 45.5, "name": "13_victory_title_triumph.png", "desc": "Hero Victory Push-In & Player Wins Title" }
 ]
+
 
 var current_capture_idx: int = 0
 var elapsed: float = 0.0
@@ -103,10 +106,13 @@ func _process(delta: float) -> bool:
 func _do_capture(target_shot: Dictionary) -> void:
 	await RenderingServer.frame_post_draw
 	var filepath = output_dir + "/" + target_shot["name"]
+	var docs_filepath = docs_dir + "/" + target_shot["name"]
 	var cam = root.get_viewport().get_camera_3d()
 	var img: Image = root.get_viewport().get_texture().get_image()
 	if img:
 		img.save_png(filepath)
+		DirAccess.make_dir_recursive_absolute(docs_dir)
+		img.save_png(docs_filepath)
 		print("[Proof %02d/%02d] Captured %s (t=%.1fs) [Cam: %s @ %s] -> %s" % [
 			current_capture_idx + 1,
 			capture_schedule.size(),
@@ -118,6 +124,7 @@ func _do_capture(target_shot: Dictionary) -> void:
 		])
 	current_capture_idx += 1
 	is_capturing = false
+
 
 func _finish_captures() -> void:
 	print("\n=================================================================")

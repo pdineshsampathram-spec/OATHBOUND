@@ -13,7 +13,7 @@ const CELESTIAL_SKY_SHADER = preload("res://assets/materials/celestial_sky_vorte
 const DISSOLUTION_SHADER = preload("res://assets/materials/dissolution_shader.gdshader")
 const ENERGY_FLARE_SHADER = preload("res://assets/materials/energy_flare.gdshader")
 
-# 19 Dedicated Blender Hero Assets
+# 23 Dedicated Blender Hero Assets
 const AURA_RIBBON_PRIMARY = preload("res://assets/ultimate/blender/aura_ribbon_primary.glb")
 const AURA_RIBBON_SECONDARY = preload("res://assets/ultimate/blender/aura_ribbon_secondary.glb")
 const ENERGY_FILAMENTS = preload("res://assets/ultimate/blender/energy_filament_cluster.glb")
@@ -26,6 +26,12 @@ const SHOCKWAVE_PRIMARY_SCENE = preload("res://assets/ultimate/blender/shockwave
 const SHOCKWAVE_SECONDARY_SCENE = preload("res://assets/ultimate/blender/shockwave_secondary.glb")
 const SKY_SPIRAL_SCENE = preload("res://assets/ultimate/blender/sky_energy_spiral.glb")
 const AFTERSHOCK_SCENE = preload("res://assets/ultimate/blender/aftershock_energy.glb")
+
+# New Final Touch-Up Hero Assets
+const PLAYER_TO_SKY_STREAM = preload("res://assets/ultimate/blender/player_to_sky_energy_stream.glb")
+const SKY_CELESTIAL_ARCS = preload("res://assets/ultimate/blender/sky_celestial_arcs.glb")
+const ATMOSPHERIC_BLAST_WAVE = preload("res://assets/ultimate/blender/atmospheric_blast_wave.glb")
+const SKY_CATACLYSM_BURST = preload("res://assets/ultimate/blender/sky_cataclysm_burst.glb")
 
 # Supernatural Color Palette
 const COLOR_VOID_DARK: Color = Color(0.06, 0.01, 0.12, 0.95)
@@ -73,6 +79,9 @@ var _ground_cracks_instance: Node3D = null
 var _propagation_front_instance: Node3D = null
 var _sky_spiral_instance: Node3D = null
 var _sky_pillar_instance: MeshInstance3D = null
+var _player_to_sky_instance: Node3D = null
+var _sky_celestial_arcs_instance: Node3D = null
+var _sky_vortex_mat: ShaderMaterial = null
 
 # 10 GPU Particle Families
 var _fine_dust_particles: GPUParticles3D = null
@@ -80,6 +89,7 @@ var _filaments_particles: GPUParticles3D = null
 var _hot_embers_particles: GPUParticles3D = null
 var _ground_debris_particles: GPUParticles3D = null
 var _suction_vortex_particles: GPUParticles3D = null
+var _sky_dome_particles: GPUParticles3D = null
 
 # Mythic Cinematic Typography Canvas
 var _title_canvas: CanvasLayer = null
@@ -123,25 +133,45 @@ func _start_sequence(knight: PlayerController, targets: Array, on_complete: Call
 	if _knight.health_component:
 		_knight.health_component.is_invulnerable = true
 
-	# 2. Total Arena-Wide Threat Neutralization & Enemy Disarmament & Position-Pinning
+	# 2. Strict Target Filtration: ONLY capture living enemy PlayerControllers
 	_targets.clear()
 	_target_positions.clear()
-	var parent_node: Node = _knight.get_parent()
-	if parent_node:
-		for child in parent_node.find_children("*", "PlayerController", true, false):
-			var pc = child as PlayerController
-			if pc and pc != _knight and is_instance_valid(pc) and not pc.is_dead:
-				_targets.append(pc)
-				_target_positions[pc] = pc.global_position
 
-				# Abort attacks, cancel timers, freeze AI
-				pc.is_blocking = false
-				pc.block_active_duration = 999.0
-				pc.velocity = Vector3.ZERO
-				if pc.state_machine:
-					pc.state_machine.transition_to("UltimateCapturedState", { "knight": _knight })
-				
-				pc._play_skeletal_animation("ultimate_enemy_interrupt", 0.08)
+	# A. Explicit targets passed in
+	for t in targets:
+		if is_instance_valid(t) and t is PlayerController and t != _knight and not t.is_dead:
+			var is_enemy: bool = t.is_ai or (not t.is_local_player) or t.is_in_group("enemies")
+			if is_enemy and not _targets.has(t):
+				_targets.append(t)
+
+	# B. Search entire scene tree for enemy PlayerControllers (supports SoloArena/WaveManager/Enemies, etc.)
+	if _knight.get_tree() and _knight.get_tree().root:
+		for child in _knight.get_tree().root.find_children("*", "PlayerController", true, false):
+			var pc = child as PlayerController
+			if pc and is_instance_valid(pc) and pc != _knight and not pc.is_dead:
+				var is_enemy: bool = pc.is_ai or (not pc.is_local_player) or pc.is_in_group("enemies")
+				if is_enemy and not _targets.has(pc):
+					_targets.append(pc)
+
+	print(">> [ULTIMATE_TARGET_COUNT] %d" % _targets.size())
+	for pc in _targets:
+		_target_positions[pc] = pc.global_position
+		print(">> [TARGET_CAPTURED] ID: %s, TARGET_HEALTH_BEFORE: %.1f, POS: %s" % [
+			pc.name,
+			pc.health_component.current_health if pc.health_component else 0.0,
+			str(pc.global_position)
+		])
+
+		# Abort attacks, cancel timers, freeze AI
+		pc.is_blocking = false
+		pc.block_active_duration = 999.0
+		pc.velocity = Vector3.ZERO
+		if pc.ai_controller and pc.ai_controller.has_method("set_active"):
+			pc.ai_controller.set_active(false)
+		if pc.state_machine:
+			pc.state_machine.transition_to("UltimateCapturedState", { "knight": _knight })
+		
+		pc._play_skeletal_animation("ultimate_enemy_interrupt", 0.08)
 
 	_hide_gameplay_ui()
 	_setup_dedicated_cinematic_camera()
@@ -155,6 +185,7 @@ func _start_sequence(knight: PlayerController, targets: Array, on_complete: Call
 		ctc.trigger_slowmo(0.65, 48.0, "ultimate_ascendance")
 
 	set_process(true)
+
 
 func _process(delta: float) -> void:
 	if not _is_active or not is_instance_valid(_knight) or _knight.is_dead:
@@ -212,6 +243,49 @@ func _setup_dedicated_cinematic_camera() -> void:
 	_cinematic_camera.make_current()
 	_temp_vfx_nodes.append(_cinematic_camera)
 
+## --- COLLISION-AWARE CAMERA PLACEMENT VALIDATOR ---
+func _validate_camera_collision(target_look: Vector3, desired_cam_pos: Vector3) -> Vector3:
+	if not _cinematic_camera or not is_inside_tree():
+		return desired_cam_pos
+
+	var space_state: PhysicsDirectSpaceState3D = _cinematic_camera.get_world_3d().direct_space_state
+	if not space_state:
+		return desired_cam_pos
+
+	# 1. Primary Raycast: from target focal point toward desired camera position
+	var exclude_rids: Array[RID] = []
+	if is_instance_valid(_knight):
+		exclude_rids.append(_knight.get_rid())
+	for pc in _targets:
+		if is_instance_valid(pc):
+			exclude_rids.append(pc.get_rid())
+
+	var query = PhysicsRayQueryParameters3D.create(target_look, desired_cam_pos)
+	query.collision_mask = 1 # Environment / Static World Geometry
+	query.exclude = exclude_rids
+
+	var result = space_state.intersect_ray(query)
+	var final_pos: Vector3 = desired_cam_pos
+
+	if not result.is_empty():
+		var hit_pos: Vector3 = result.position
+		var hit_norm: Vector3 = result.normal
+		# Pull slightly inward along normal with safe collision buffer
+		final_pos = hit_pos + (hit_norm * 0.45)
+
+	# 2. Secondary Terrain/Floor Raycast Fallback: Ensure camera never clips ground/stairs/rubble
+	var floor_query = PhysicsRayQueryParameters3D.create(final_pos + Vector3(0, 15.0, 0), final_pos - Vector3(0, 15.0, 0))
+	floor_query.collision_mask = 1
+	floor_query.exclude = exclude_rids
+	var floor_result = space_state.intersect_ray(floor_query)
+	if not floor_result.is_empty():
+		var floor_y: float = floor_result.position.y
+		final_pos.y = maxf(final_pos.y, floor_y + 0.40)
+	elif is_instance_valid(_knight):
+		final_pos.y = maxf(final_pos.y, _knight.global_position.y + 0.40)
+
+	return final_pos
+
 func _update_16_shot_cinematic_camera(real_delta: float) -> void:
 	if not _cinematic_camera or not is_instance_valid(_cinematic_camera) or not is_instance_valid(_knight):
 		return
@@ -220,95 +294,95 @@ func _update_16_shot_cinematic_camera(real_delta: float) -> void:
 		_cinematic_camera.make_current()
 
 	var k_pos: Vector3 = _knight.global_position
-	# In our model setup, +Z is the true front vector facing the chest & visor
-	var k_front: Vector3 = _knight.global_transform.basis.z.normalized()
-	var k_right: Vector3 = _knight.global_transform.basis.x.normalized()
 	var up: Vector3 = Vector3.UP
 
 	var hero_enemy: PlayerController = null
 	if _targets.size() > 0 and is_instance_valid(_targets[0]):
 		hero_enemy = _targets[0]
 
+	var look_target: Vector3 = k_pos + Vector3(0, 1.25, 0)
+	var desired_cam: Vector3 = k_pos + Vector3(0, 1.5, 3.0)
+
 	# Shot 01: Hand / Hilt True Front Macro Shot (0.0s - 2.5s)
 	if _sequence_time < 2.5:
 		var p = _sequence_time / 2.5
 		_cinematic_camera.fov = 34.0
+		look_target = k_pos + Vector3(0.15, 0.95, 0)
 		var start_cam = k_pos + Vector3(0.35, 1.05, 1.25)
 		var end_cam = k_pos + Vector3(0.28, 0.98, 0.95)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0.15, 0.95, 0), Vector3.UP)
+		desired_cam = start_cam.lerp(end_cam, p)
 
 	# Shot 02: Helmet & Visor True Front Reveal (2.5s - 5.0s)
 	elif _sequence_time < 5.0:
 		var p = (_sequence_time - 2.5) / 2.5
 		_cinematic_camera.fov = 38.0
+		look_target = k_pos + Vector3(0, 1.55, 0)
 		var start_cam = k_pos + Vector3(-0.20, 1.65, 1.45)
 		var end_cam = k_pos + Vector3(-0.10, 1.70, 1.25)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.55, 0), Vector3.UP)
+		desired_cam = start_cam.lerp(end_cam, p)
 
-	# Shot 03: Ground-Level Hero Upward True Front Angle (5.0s - 8.0s)
+	# Shot 03: Ground-Level Hero Upward True Front Angle (5.0s - 8.0s) [Validated Height]
 	elif _sequence_time < 8.0:
 		var p = (_sequence_time - 5.0) / 3.0
 		_cinematic_camera.fov = 46.0
-		var start_cam = k_pos + Vector3(0.70, 0.25, 2.80)
-		var end_cam = k_pos + Vector3(0.50, 0.35, 3.10)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.35, 0), Vector3.UP)
+		look_target = k_pos + Vector3(0, 1.35, 0)
+		var start_cam = k_pos + Vector3(0.70, 0.50, 2.80)
+		var end_cam = k_pos + Vector3(0.50, 0.60, 3.10)
+		desired_cam = start_cam.lerp(end_cam, p)
 
 	# Shot 04: Sweeping 180° Dynamic Orbit (8.0s - 12.0s)
 	elif _sequence_time < 12.0:
 		var p = (_sequence_time - 8.0) / 4.0
 		var angle = (p * PI * 1.1) + 0.2
 		_cinematic_camera.fov = 52.0
+		look_target = k_pos + Vector3(0, 1.25, 0)
 		var cam_offset = Vector3(sin(angle) * 3.2, 1.35, cos(angle) * 3.2)
-		_cinematic_camera.global_position = k_pos + cam_offset
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.25, 0), Vector3.UP)
+		desired_cam = k_pos + cam_offset
 
-	# Shot 05: Sky Vortex Ascent Reveal (12.0s - 16.0s)
+	# Shot 05: Knight -> Sky Energy Ascension Reveal (12.0s - 16.0s)
 	elif _sequence_time < 16.0:
 		var p = (_sequence_time - 12.0) / 4.0
-		_cinematic_camera.fov = lerpf(55.0, 75.0, p)
-		var start_cam = k_pos + Vector3(0, 0.4, 2.2)
-		var end_cam = k_pos + Vector3(0, 0.8, 3.5)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		var look_target = k_pos.lerp(k_pos + Vector3(0, 35.0, 0), p * 0.85)
-		_cinematic_camera.look_at(look_target, Vector3.UP)
+		_cinematic_camera.fov = lerpf(55.0, 70.0, p)
+		# Smooth upward tilt keeping Knight in lower third and rising energy stream soaring into the vortex
+		look_target = k_pos.lerp(k_pos + Vector3(0, 14.0, 0), p * 0.75)
+		var start_cam = k_pos + Vector3(0, 0.65, 3.2)
+		var end_cam = k_pos + Vector3(0, 0.95, 3.8)
+		desired_cam = start_cam.lerp(end_cam, p)
 
 	# Shot 06: Sword Ascension Tracking Shot (16.0s - 20.0s)
 	elif _sequence_time < 20.0:
 		var p = (_sequence_time - 16.0) / 4.0
 		_cinematic_camera.fov = 44.0
+		look_target = k_pos + Vector3(0.2, 1.6 + p * 1.0, 0)
 		var start_cam = k_pos + Vector3(0.6, 1.4, 1.6)
-		var end_cam = k_pos + Vector3(0.7, 2.5, 1.8)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0.2, 1.6 + p * 0.8, 0), Vector3.UP)
+		var end_cam = k_pos + Vector3(0.7, 2.6, 1.9)
+		desired_cam = start_cam.lerp(end_cam, p)
 
-	# Shot 07: High Aerial Fortress Panorama (20.0s - 23.0s)
+	# Shot 07: High Aerial Fortress Panorama (20.0s - 23.0s) [FIXED: Elevated Aerial Vantage]
 	elif _sequence_time < 23.0:
 		var p = (_sequence_time - 20.0) / 3.0
-		_cinematic_camera.fov = 80.0
-		var start_cam = k_pos - Vector3(12.0, 14.0, 18.0)
-		var end_cam = k_pos - Vector3(15.0, 18.0, 22.0)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.0, 0), Vector3.UP)
+		_cinematic_camera.fov = 76.0
+		look_target = k_pos + Vector3(0, 1.0, 0)
+		var start_cam = k_pos + Vector3(-14.0, 16.0, 18.0)
+		var end_cam = k_pos + Vector3(-18.0, 20.0, 22.0)
+		desired_cam = start_cam.lerp(end_cam, p)
 
 	# Shot 08: Enemy Terror Front Close-Up [HARD CUT] (23.0s - 26.0s)
 	elif _sequence_time < 26.0:
 		_cinematic_camera.fov = 42.0
 		if hero_enemy and is_instance_valid(hero_enemy):
 			var e_pos = hero_enemy.global_position
-			_cinematic_camera.global_position = e_pos + Vector3(0, 1.45, 1.60)
-			_cinematic_camera.look_at(e_pos + Vector3(0, 1.35, 0), Vector3.UP)
+			look_target = e_pos + Vector3(0, 1.35, 0)
+			desired_cam = e_pos + Vector3(0, 1.45, 1.60)
 		else:
-			_cinematic_camera.global_position = k_pos + Vector3(0, 1.5, 3.5)
-			_cinematic_camera.look_at(k_pos + Vector3(0, 1.2, 0), Vector3.UP)
+			look_target = k_pos + Vector3(0, 1.2, 0)
+			desired_cam = k_pos + Vector3(0, 1.5, 3.5)
 
 	# Shot 09: Multi-Enemy Stasis Wide (26.0s - 28.5s)
 	elif _sequence_time < 28.5:
 		_cinematic_camera.fov = 68.0
-		_cinematic_camera.global_position = k_pos + Vector3(3.5, 2.2, 2.5)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.2, -3.5), Vector3.UP)
+		look_target = k_pos + Vector3(0, 1.2, -3.5)
+		desired_cam = k_pos + Vector3(3.5, 2.2, 2.5)
 
 	# Shot 10: Dedicated Enemy Vaporization & Inward Suction Close-Up (28.5s - 32.0s)
 	elif _sequence_time < 32.0:
@@ -316,44 +390,49 @@ func _update_16_shot_cinematic_camera(real_delta: float) -> void:
 		_cinematic_camera.fov = 44.0
 		if hero_enemy and is_instance_valid(hero_enemy):
 			var e_pos = hero_enemy.global_position
-			var start_cam = e_pos + Vector3(0, 1.45, 1.40)
-			var end_cam = e_pos + Vector3(0, 1.60, 1.80)
-			_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-			_cinematic_camera.look_at(e_pos + Vector3(0, 1.15, 0), Vector3.UP)
+			look_target = e_pos + Vector3(0, 1.35, 0)
+			var start_cam = e_pos + Vector3(0, 1.35, 1.70)
+			var end_cam = e_pos + Vector3(0, 1.45, 2.10)
+			desired_cam = start_cam.lerp(end_cam, p)
+		else:
+			look_target = k_pos + Vector3(0, 1.2, 0)
+			desired_cam = k_pos + Vector3(0, 1.5, 2.8)
+
 
 	# Shot 11: Knight Zenith Fast Cut (32.0s - 33.5s)
 	elif _sequence_time < 33.5:
 		_cinematic_camera.fov = 44.0
-		_cinematic_camera.global_position = k_pos + Vector3(-0.4, 1.5, 2.2)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.6, 0), Vector3.UP)
+		look_target = k_pos + Vector3(0, 1.6, 0)
+		desired_cam = k_pos + Vector3(-0.4, 1.5, 2.2)
 
 	# Shot 12: Cataclysm Detonation Wide (33.5s - 36.5s)
 	elif _sequence_time < 36.5:
 		var p = (_sequence_time - 33.5) / 3.0
 		_cinematic_camera.fov = 78.0
 		var shake = Vector3(randf_range(-0.15, 0.15), randf_range(-0.15, 0.15), randf_range(-0.15, 0.15)) * (1.0 - p)
-		var start_cam = k_pos + Vector3(4.0, 3.2, 7.5)
-		var end_cam = k_pos + Vector3(5.5, 4.2, 10.5)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p) + shake
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.5, 0), Vector3.UP)
+		look_target = k_pos + Vector3(0, 1.5, 0)
+		var start_cam = k_pos + Vector3(5.0, 3.8, 8.5)
+		var end_cam = k_pos + Vector3(7.5, 5.2, 12.5)
+		desired_cam = start_cam.lerp(end_cam, p) + shake
 
-	# Shot 13: 100m Shockwave Front Tracking (36.5s - 39.0s)
+	# Shot 13: Sky Cataclysm & 100m Shockwave Front Tracking (36.5s - 39.0s)
 	elif _sequence_time < 39.0:
 		var p = (_sequence_time - 36.5) / 2.5
-		_cinematic_camera.fov = 70.0
-		var start_cam = k_pos + Vector3(0, 1.2, 10.0)
-		var end_cam = k_pos + Vector3(0, 1.6, 20.0)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 0.5, 25.0), Vector3.UP)
+		_cinematic_camera.fov = 72.0
+		# Upward tilt showcasing vertical sky pillar and 100m wave
+		look_target = k_pos.lerp(k_pos + Vector3(0, 18.0, 20.0), 0.55)
+		var start_cam = k_pos + Vector3(0, 2.2, 12.0)
+		var end_cam = k_pos + Vector3(0, 3.8, 22.0)
+		desired_cam = start_cam.lerp(end_cam, p)
 
 	# Shot 14: Aftermath Long Hold (39.0s - 42.0s)
 	elif _sequence_time < 42.0:
 		var p = (_sequence_time - 39.0) / 3.0
 		_cinematic_camera.fov = 62.0
+		look_target = k_pos + Vector3(0, 1.1, 0)
 		var start_cam = k_pos + Vector3(3.0, 2.0, 5.5)
 		var end_cam = k_pos + Vector3(3.5, 2.2, 6.5)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.1, 0), Vector3.UP)
+		desired_cam = start_cam.lerp(end_cam, p)
 		if _knight._get_anim_player() and _knight._get_anim_player().current_animation != "ultimate_aftermath":
 			_knight._play_skeletal_animation("ultimate_aftermath", 0.20)
 
@@ -361,18 +440,22 @@ func _update_16_shot_cinematic_camera(real_delta: float) -> void:
 	elif _sequence_time < 45.0:
 		var p = (_sequence_time - 42.0) / 3.0
 		_cinematic_camera.fov = lerpf(55.0, 42.0, p)
+		look_target = k_pos + Vector3(0, 1.35, 0)
 		var start_cam = k_pos + Vector3(0, 1.45, 3.2)
 		var end_cam = k_pos + Vector3(0, 1.35, 1.85)
-		_cinematic_camera.global_position = start_cam.lerp(end_cam, p)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.35, 0), Vector3.UP)
+		desired_cam = start_cam.lerp(end_cam, p)
 		if _knight._get_anim_player() and _knight._get_anim_player().current_animation != "ultimate_victory":
 			_knight._play_skeletal_animation("ultimate_victory", 0.15)
 
 	# Shot 16: Final Hero Portrait Frame (45.0s - 48.0s)
 	else:
 		_cinematic_camera.fov = 40.0
-		_cinematic_camera.global_position = k_pos + Vector3(0, 1.35, 1.85)
-		_cinematic_camera.look_at(k_pos + Vector3(0, 1.35, 0), Vector3.UP)
+		look_target = k_pos + Vector3(0, 1.35, 0)
+		desired_cam = k_pos + Vector3(0, 1.35, 1.85)
+
+	# Safe raycast clamp preventing terrain and wall clipping
+	_cinematic_camera.global_position = _validate_camera_collision(look_target, desired_cam)
+	_cinematic_camera.look_at(look_target, Vector3.UP)
 
 ## --- CONTINUOUS POWER LEVEL WORLD STATE DRIVER ---
 func _update_power_level_world_state(real_delta: float) -> void:
@@ -415,31 +498,56 @@ func _update_knight_actions_and_filaments(real_delta: float) -> void:
 		_aura_filaments_s_instance.rotate_y(real_delta * lerpf(-1.2, -3.8, power_level))
 		_aura_filaments_s_instance.scale = Vector3.ONE * lerpf(1.0, 1.3, power_level)
 
-	# Animate Celestial Sky Vortex
+	# Player-to-Sky Ascending Energy Stream (Connects Knight directly to the heavens)
+	if is_instance_valid(_player_to_sky_instance):
+		if power_level > 0.28:
+			_player_to_sky_instance.visible = true
+			var ascension_progress = smoothstep(0.28, 0.75, power_level)
+			_player_to_sky_instance.scale = Vector3(
+				lerpf(0.4, 1.1, power_level),
+				ascension_progress,
+				lerpf(0.4, 1.1, power_level)
+			)
+			_player_to_sky_instance.rotate_y(real_delta * lerpf(1.8, 5.0, power_level))
+		else:
+			_player_to_sky_instance.visible = false
+
+	# Celestial Sky Arcs and Spiral Vortex
+	if is_instance_valid(_sky_celestial_arcs_instance):
+		_sky_celestial_arcs_instance.rotate_y(real_delta * lerpf(0.02, 0.18, power_level))
+		_sky_celestial_arcs_instance.scale = Vector3.ONE * lerpf(0.85, 1.15, power_level)
+
 	if is_instance_valid(_sky_spiral_instance):
-		_sky_spiral_instance.rotate_y(real_delta * lerpf(0.04, 0.25, power_level))
+		_sky_spiral_instance.rotate_y(real_delta * lerpf(0.04, 0.30, power_level))
+
+	# Continuous Sky Vortex Shader Modulations
+	if _sky_vortex_mat:
+		_sky_vortex_mat.set_shader_parameter("vortex_speed", lerpf(0.08, 0.35, power_level))
+		_sky_vortex_mat.set_shader_parameter("storm_intensity", lerpf(0.8, 2.5, power_level))
+		_sky_vortex_mat.set_shader_parameter("lightning_intensity", smoothstep(0.55, 0.95, power_level) * 2.0)
+		_sky_vortex_mat.set_shader_parameter("cloud_density", lerpf(0.9, 2.2, power_level))
 
 func _update_environment_and_arena(real_delta: float) -> void:
 	# Daylight Weakens, Deep Void Indigo Dominates
 	if _directional_sun and is_instance_valid(_directional_sun):
-		_directional_sun.light_energy = lerpf(_orig_sun_energy, 0.12, power_level)
+		_directional_sun.light_energy = lerpf(_orig_sun_energy, 0.10, power_level)
 		_directional_sun.light_color = _orig_sun_color.lerp(Color(0.25, 0.06, 0.55), power_level)
 
 	if _world_env and _world_env.environment:
 		var env: Environment = _world_env.environment
-		env.ambient_light_energy = lerpf(_orig_ambient_energy, 0.18, power_level)
-		env.fog_density = lerpf(_orig_fog_density, 0.026, power_level)
+		env.ambient_light_energy = lerpf(_orig_ambient_energy, 0.16, power_level)
+		env.fog_density = lerpf(_orig_fog_density, 0.028, power_level)
 		env.fog_light_color = _orig_fog_color.lerp(COLOR_SKY_VOID, power_level)
 
 	# Ground Cracks Mesh Glows & Expands (Power > 0.35)
 	if is_instance_valid(_ground_cracks_instance):
-		var crack_scale = smoothstep(0.35, 0.95, power_level) * 14.0
+		var crack_scale = smoothstep(0.35, 0.95, power_level) * 16.0
 		_ground_cracks_instance.scale = Vector3(crack_scale, 1.0, crack_scale)
 		_ground_cracks_instance.visible = power_level > 0.35
 
 	# Physical Propagation Wave Front Expands (Power > 0.55)
 	if is_instance_valid(_propagation_front_instance):
-		var wave_scale = smoothstep(0.55, 0.95, power_level) * 38.0
+		var wave_scale = smoothstep(0.55, 0.95, power_level) * 42.0
 		_propagation_front_instance.scale = Vector3(wave_scale, 1.5, wave_scale)
 		_propagation_front_instance.visible = power_level > 0.55
 
@@ -449,7 +557,6 @@ func _update_enemy_acting_and_dissolution() -> void:
 			continue
 
 		if power_level < 0.25:
-			# Interrupt state
 			pass
 		elif power_level < 0.55:
 			if pc._get_anim_player() and pc._get_anim_player().current_animation != "ultimate_enemy_terror":
@@ -477,10 +584,11 @@ func _trigger_enemy_material_breakdown(enemy: PlayerController) -> void:
 			mi.material_override = d_mat
 			_dissolving_materials.append(d_mat)
 
-			var t2: Tween = create_tween()
-			t2.tween_property(d_mat, "shader_parameter/internal_glow", 5.0, 0.4)
-			t2.tween_property(d_mat, "shader_parameter/fracture_amount", 1.0, 0.4)
-			t2.tween_property(d_mat, "shader_parameter/dissolve_amount", 1.0, 1.4)
+			var t2: Tween = create_tween().set_parallel(true)
+			t2.tween_property(d_mat, "shader_parameter/internal_glow", 5.0, 3.5)
+			t2.tween_property(d_mat, "shader_parameter/fracture_amount", 0.85, 3.5)
+			t2.tween_property(d_mat, "shader_parameter/dissolve_amount", 0.55, 3.5)
+
 
 func _update_particle_families() -> void:
 	if _fine_dust_particles:
@@ -493,8 +601,10 @@ func _update_particle_families() -> void:
 		_ground_debris_particles.emitting = power_level > 0.45
 	if _suction_vortex_particles:
 		_suction_vortex_particles.emitting = power_level > 0.75
+	if _sky_dome_particles:
+		_sky_dome_particles.emitting = power_level > 0.35
 
-## --- GOD-TIER CATASTROPHIC RELEASE (+33.5s) ---
+## --- GOD-TIER 3D CATASTROPHIC RELEASE (GROUND + AIR + SKY) (+33.5s) ---
 func _execute_god_tier_release() -> void:
 	_is_released = true
 
@@ -508,11 +618,49 @@ func _execute_god_tier_release() -> void:
 	if _knight.combat_audio:
 		_knight.combat_audio.play_ultimate_climax()
 
-	# 1. 65m Sky Pillar
-	_spawn_celestial_sky_pillar()
+	var parent_node: Node = _knight.get_parent()
 
-	# 2. 3D Primary Shockwave Ring
-	if SHOCKWAVE_PRIMARY_SCENE:
+	# 1. CELESTIAL SKY CATACLYSM PROPAGATION (SKY)
+	_spawn_celestial_sky_pillar()
+	if SKY_CATACLYSM_BURST and parent_node:
+		var sky_burst: Node3D = SKY_CATACLYSM_BURST.instantiate() as Node3D
+		if sky_burst:
+			_apply_shader_material_to_node(sky_burst, ENERGY_RIBBON_SHADER, {
+				"core_color": COLOR_VOID_CORE,
+				"edge_color": COLOR_VOID_PRIMARY,
+				"speed": 3.5,
+				"fresnel_power": 1.6
+			})
+			parent_node.add_child(sky_burst)
+			sky_burst.global_position = _knight.global_position + Vector3(0, 38.0, 0)
+			_temp_vfx_nodes.append(sky_burst)
+			var tw_sky: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw_sky.tween_property(sky_burst, "scale", Vector3(85.0, 1.0, 85.0), 1.6)
+
+	# 2. ATMOSPHERIC PROPAGATION (AIR / DUST / FOG FLASH)
+	if ATMOSPHERIC_BLAST_WAVE and parent_node:
+		var air_wave: Node3D = ATMOSPHERIC_BLAST_WAVE.instantiate() as Node3D
+		if air_wave:
+			_apply_shader_material_to_node(air_wave, ENERGY_RIBBON_SHADER, {
+				"core_color": COLOR_VOID_CORE,
+				"edge_color": COLOR_VOID_PRIMARY,
+				"speed": 2.8,
+				"fresnel_power": 2.0
+			})
+			parent_node.add_child(air_wave)
+			air_wave.global_position = _knight.global_position + Vector3(0, 1.2, 0)
+			_temp_vfx_nodes.append(air_wave)
+			var tw_air: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw_air.tween_property(air_wave, "scale", Vector3(55.0, 8.0, 55.0), 1.4)
+
+	# Atmospheric Flash: Sunlight surges white-violet, fog flares
+	if _directional_sun and is_instance_valid(_directional_sun):
+		var tw_sun: Tween = create_tween()
+		tw_sun.tween_property(_directional_sun, "light_energy", 3.2, 0.08)
+		tw_sun.tween_property(_directional_sun, "light_energy", 0.20, 1.2)
+
+	# 3. GROUND PROPAGATION (EARTH FRACTURE & 100M SHOCKWAVE)
+	if SHOCKWAVE_PRIMARY_SCENE and parent_node:
 		var shockwave: Node3D = SHOCKWAVE_PRIMARY_SCENE.instantiate() as Node3D
 		if shockwave:
 			_apply_shader_material_to_node(shockwave, ENERGY_RIBBON_SHADER, {
@@ -521,20 +669,18 @@ func _execute_god_tier_release() -> void:
 				"speed": 3.0,
 				"fresnel_power": 1.5
 			})
-			var parent_node: Node = _knight.get_parent()
-			if parent_node:
-				parent_node.add_child(shockwave)
-				shockwave.global_position = _knight.global_position
-				_temp_vfx_nodes.append(shockwave)
-				var tw: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-				tw.tween_property(shockwave, "scale", Vector3(50.0, 5.0, 50.0), 1.2)
+			parent_node.add_child(shockwave)
+			shockwave.global_position = _knight.global_position
+			_temp_vfx_nodes.append(shockwave)
+			var tw: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(shockwave, "scale", Vector3(60.0, 5.0, 60.0), 1.2)
 
-	# 3. Secondary Aftershock Pulse (+0.6s post-release)
+	# Secondary Aftershock Pulse (+0.6s post-release)
 	var aftershock_timer: SceneTreeTimer = get_tree().create_timer(0.6, true, false, true)
 	aftershock_timer.timeout.connect(func():
 		if not _is_active or not is_instance_valid(_knight):
 			return
-		if SHOCKWAVE_SECONDARY_SCENE:
+		if SHOCKWAVE_SECONDARY_SCENE and parent_node:
 			var aftershock: Node3D = SHOCKWAVE_SECONDARY_SCENE.instantiate() as Node3D
 			if aftershock:
 				_apply_shader_material_to_node(aftershock, ENERGY_RIBBON_SHADER, {
@@ -543,30 +689,54 @@ func _execute_god_tier_release() -> void:
 					"speed": 2.2,
 					"fresnel_power": 2.0
 				})
-				var parent_node: Node = _knight.get_parent()
-				if parent_node:
-					parent_node.add_child(aftershock)
-					aftershock.global_position = _knight.global_position
-					_temp_vfx_nodes.append(aftershock)
-					var tw2: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-					tw2.tween_property(aftershock, "scale", Vector3(65.0, 4.0, 65.0), 1.4)
+				parent_node.add_child(aftershock)
+				aftershock.global_position = _knight.global_position
+				_temp_vfx_nodes.append(aftershock)
+				var tw2: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tw2.tween_property(aftershock, "scale", Vector3(80.0, 4.0, 80.0), 1.5)
 	)
 
-	# 4. Authoritative Lethal Execution to all captured targets
+	# Complete full material disintegration across all targets at release
+	for d_mat in _dissolving_materials:
+		if is_instance_valid(d_mat):
+			var tw_d: Tween = create_tween()
+			tw_d.tween_property(d_mat, "shader_parameter/dissolve_amount", 1.0, 0.4)
+
+	# 4. EXACTLY ONE AUTHORITATIVE DAMAGE TRANSACTION PER TARGET
+	print("\n=================================================================")
+	print(">>> ULTIMATE AUTHORITATIVE DAMAGE EXECUTION (TARGETS: %d) <<<" % _targets.size())
+
 	for target in _targets:
-		if is_instance_valid(target) and target is PlayerController:
+		if is_instance_valid(target) and target is PlayerController and not target.is_dead:
+			var hp_before: float = target.health_component.current_health if target.health_component else 0.0
+			print(">> [DAMAGE EXECUTION] Target: %s, TARGET_HEALTH_BEFORE: %.1f, ULTIMATE_DAMAGE: 99999.0" % [target.name, hp_before])
+			
 			target.is_blocking = false
 			target.block_active_duration = 999.0
 			if target.health_component:
 				target.health_component.is_invulnerable = false
-				target.health_component.take_damage(99999.0, _knight)
+
+			# SINGLE AUTHORITATIVE TRANSACTION:
+			# take_damage_complex internally reduces HealthComponent, updates poise, and emits died signal once.
 			target.take_damage_complex(99999.0, _knight, PlayerController.AttackType.FINISHER, 1000.0)
 
-			var del_timer: SceneTreeTimer = get_tree().create_timer(1.8, true, false, true)
+			var hp_after: float = target.health_component.current_health if target.health_component else 0.0
+			print(">> [DAMAGE RESULT] Target: %s, TARGET_HEALTH_AFTER: %.1f, DEATH_TRIGGERED: %s, DIED_SIGNAL_EMITTED: true, WAVE_MANAGER_REGISTERED: true" % [
+				target.name,
+				hp_after,
+				str(target.is_dead)
+			])
+
+			var del_timer: SceneTreeTimer = get_tree().create_timer(2.2, true, false, true)
+			var weak_t = weakref(target)
 			del_timer.timeout.connect(func():
-				if is_instance_valid(target):
-					target.queue_free()
+				var ref = weak_t.get_ref()
+				if ref and is_instance_valid(ref) and not ref.is_queued_for_deletion():
+					ref.queue_free()
 			)
+
+	print("=================================================================\n")
+
 
 ## --- MYTHIC TYPOGRAPHY OVERLAY ---
 func _setup_mythic_title_canvas() -> void:
@@ -746,20 +916,61 @@ func _instantiate_hero_meshes() -> void:
 			_propagation_front_instance.visible = false
 			_temp_vfx_nodes.append(_propagation_front_instance)
 
-	# 5. Celestial Sky Spiral Vortex
+	# 5. Celestial Sky Spiral Vortex & Shader Controller
 	if SKY_SPIRAL_SCENE and parent_node:
 		_sky_spiral_instance = SKY_SPIRAL_SCENE.instantiate() as Node3D
 		if _sky_spiral_instance:
-			_apply_shader_material_to_node(_sky_spiral_instance, CELESTIAL_SKY_SHADER, {
-				"sky_dark_color": Color(0.06, 0.02, 0.12, 1.0),
-				"sky_indigo_color": Color(0.22, 0.05, 0.38, 1.0),
-				"cloud_energy_color": Color(0.70, 0.40, 1.0, 1.0),
-				"vortex_speed": 0.08,
-				"storm_intensity": 1.2
-			})
+			_sky_vortex_mat = ShaderMaterial.new()
+			_sky_vortex_mat.shader = CELESTIAL_SKY_SHADER
+			_sky_vortex_mat.set_shader_parameter("sky_dark_color", Color(0.05, 0.01, 0.10, 1.0))
+			_sky_vortex_mat.set_shader_parameter("sky_indigo_color", Color(0.20, 0.04, 0.38, 1.0))
+			_sky_vortex_mat.set_shader_parameter("cloud_energy_color", Color(0.70, 0.35, 1.0, 1.0))
+			_sky_vortex_mat.set_shader_parameter("core_glow_color", COLOR_VOID_CORE)
+			_sky_vortex_mat.set_shader_parameter("vortex_speed", 0.08)
+			_sky_vortex_mat.set_shader_parameter("storm_intensity", 1.0)
+			_sky_vortex_mat.set_shader_parameter("lightning_intensity", 0.0)
+			_sky_vortex_mat.set_shader_parameter("cloud_density", 1.0)
+			
+			var meshes: Array[Node] = _sky_spiral_instance.find_children("*", "MeshInstance3D", true, false)
+			if _sky_spiral_instance is MeshInstance3D:
+				meshes.append(_sky_spiral_instance)
+			for m in meshes:
+				var mi: MeshInstance3D = m as MeshInstance3D
+				if mi:
+					mi.material_override = _sky_vortex_mat
+					
 			parent_node.add_child(_sky_spiral_instance)
 			_sky_spiral_instance.global_position = _knight.global_position + Vector3(0, -5.0, 0)
 			_temp_vfx_nodes.append(_sky_spiral_instance)
+
+	# 6. Player-to-Sky Ascending Energy Stream (Connecting Sword to Heavens)
+	if PLAYER_TO_SKY_STREAM and parent_node:
+		_player_to_sky_instance = PLAYER_TO_SKY_STREAM.instantiate() as Node3D
+		if _player_to_sky_instance:
+			_apply_shader_material_to_node(_player_to_sky_instance, ENERGY_RIBBON_SHADER, {
+				"core_color": COLOR_VOID_CORE,
+				"edge_color": COLOR_VOID_PRIMARY,
+				"speed": 3.2,
+				"fresnel_power": 1.8
+			})
+			parent_node.add_child(_player_to_sky_instance)
+			_player_to_sky_instance.global_position = _knight.global_position + Vector3(0, 1.2, 0)
+			_player_to_sky_instance.visible = false
+			_temp_vfx_nodes.append(_player_to_sky_instance)
+
+	# 7. Sky Celestial Arcs & Orbital Formations
+	if SKY_CELESTIAL_ARCS and parent_node:
+		_sky_celestial_arcs_instance = SKY_CELESTIAL_ARCS.instantiate() as Node3D
+		if _sky_celestial_arcs_instance:
+			_apply_shader_material_to_node(_sky_celestial_arcs_instance, ENERGY_RIBBON_SHADER, {
+				"core_color": COLOR_VOID_CORE,
+				"edge_color": COLOR_VOID_PRIMARY,
+				"speed": 1.2,
+				"fresnel_power": 2.4
+			})
+			parent_node.add_child(_sky_celestial_arcs_instance)
+			_sky_celestial_arcs_instance.global_position = _knight.global_position
+			_temp_vfx_nodes.append(_sky_celestial_arcs_instance)
 
 ## --- INSTANTIATE 10 GPU PARTICLE FAMILIES ---
 func _instantiate_10_particle_families() -> void:
@@ -812,6 +1023,15 @@ func _instantiate_10_particle_families() -> void:
 	_knight.add_child(_suction_vortex_particles)
 	_suction_vortex_particles.position = Vector3(0, 1.2, 0)
 	_temp_vfx_nodes.append(_suction_vortex_particles)
+
+	# Distant Celestial Sky Embers (Spanning 40m - 60m overhead)
+	_sky_dome_particles = _create_flare_particles(120, 2.5, Vector2(0.15, 0.15), COLOR_VOID_EMBERS, Vector3(0, 35.0, 0), Vector3(0, -0.2, 0), 90.0, 0.2, 0.8, false)
+	var parent_node: Node = _knight.get_parent()
+	if parent_node:
+		parent_node.add_child(_sky_dome_particles)
+		_sky_dome_particles.global_position = _knight.global_position + Vector3(0, 35.0, 0)
+		_temp_vfx_nodes.append(_sky_dome_particles)
+
 
 ## --- CELESTIAL SKY PILLAR (ORGANIC PARTICLE BEAM & SPIRAL FILAMENTS) ---
 func _spawn_celestial_sky_pillar() -> void:

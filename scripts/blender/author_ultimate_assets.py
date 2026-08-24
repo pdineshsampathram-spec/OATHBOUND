@@ -251,6 +251,181 @@ def create_shard_cluster(name, path):
     obj.data.materials.append(m)
     export_asset(obj, path)
 
+# --- 1. PLAYER-TO-SKY ASCENDING ENERGY STREAM (HERO ASSET) ---
+def create_player_to_sky_energy_stream(path):
+    reset_blend()
+    
+    # Layer A: 6 Braided Organic Helical Filaments
+    c = bpy.data.curves.new(name="AscendingStrands", type='CURVE')
+    c.dimensions = '3D'
+    c.resolution_u = 24
+    height = 42.0
+    strand_count = 6
+    
+    for strand in range(strand_count):
+        s = c.splines.new('BEZIER')
+        s.bezier_points.add(14)
+        strand_phase = (strand / float(strand_count)) * 2.0 * math.pi
+        
+        for i, pt in enumerate(s.bezier_points):
+            t = i / 14.0 # 0.0 at sword, 1.0 at sky
+            h = t * height
+            # Radius expands organically from 0.08m at blade to 0.5m in mid-air to 3.5m at sky canopy
+            r = (0.08 + 0.45 * t + 3.0 * (t ** 3.0)) + 0.12 * math.sin(t * 12.0 + strand_phase)
+            # Twisting angle
+            turns = 5.0
+            angle = t * math.pi * turns + strand_phase
+            
+            x = math.cos(angle) * r
+            y = math.sin(angle) * r
+            z = h
+            pt.co = Vector((x, y, z))
+            pt.handle_left_type = 'AUTO'
+            pt.handle_right_type = 'AUTO'
+            pt.radius = (1.0 - 0.2 * t) * (0.02 + 0.03 * math.sin(t * math.pi))
+            
+    c.extrude = 0.018
+    c.bevel_depth = 0.008
+    obj_strands = bpy.data.objects.new("AscendingStrandsObj", c)
+    bpy.context.collection.objects.link(obj_strands)
+    bpy.context.view_layer.objects.active = obj_strands
+    bpy.ops.object.convert(target='MESH')
+
+    # Layer B: Fluted Sword Collar Base (Hugging blade tip)
+    bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=0.25, radius2=0.04, depth=1.2, location=(0, 0, 0.6))
+    collar_obj = bpy.context.active_object
+    collar_obj.name = "SwordCollar"
+
+    # Layer C: Accelerating Astral Energy Shards along the column
+    shard_objs = []
+    for s_idx in range(12):
+        st = (s_idx + 1) / 13.0
+        sh_z = (st ** 1.3) * height
+        sh_ang = st * math.pi * 7.0 + (s_idx * 1.618)
+        sh_r = (0.15 + 0.6 * st)
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.08, location=(math.cos(sh_ang)*sh_r, math.sin(sh_ang)*sh_r, sh_z))
+        shard = bpy.context.active_object
+        shard.scale = Vector((0.4, 0.4, 2.2))
+        bpy.ops.object.transform_apply(scale=True)
+        shard_objs.append(shard)
+
+    # Join all layers into a unified hero asset
+    bpy.ops.object.select_all(action='DESELECT')
+    obj_strands.select_set(True)
+    collar_obj.select_set(True)
+    for sh in shard_objs:
+        sh.select_set(True)
+    bpy.context.view_layer.objects.active = obj_strands
+    bpy.ops.object.join()
+    
+    obj_strands.name = "PlayerToSkyEnergyStream"
+    m = bpy.data.materials.new(name="PlayerToSkyEnergyMat")
+    obj_strands.data.materials.append(m)
+    export_asset(obj_strands, path)
+
+# --- 2. SKY CELESTIAL ARCS & ORBITAL RINGS ---
+def create_sky_celestial_arcs(path):
+    reset_blend()
+    
+    # 3 Concentric Fluted Celestial Rings tilted in 3D
+    ring_specs = [
+        (28.0, 0.35, (12.0, 8.0, 0.0), 32.0),
+        (42.0, 0.50, (-18.0, -14.0, 25.0), 38.0),
+        (56.0, 0.70, (24.0, -10.0, -35.0), 44.0)
+    ]
+    ring_objs = []
+    for r_major, r_minor, rot_deg, z_pos in ring_specs:
+        bpy.ops.mesh.primitive_torus_add(major_radius=r_major, minor_radius=r_minor, major_segments=48, minor_segments=8, location=(0, 0, z_pos))
+        ring = bpy.context.active_object
+        ring.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+        bpy.ops.object.transform_apply(rotation=True, location=False)
+        ring_objs.append(ring)
+        
+    # Intersecting Celestial Arcs
+    c = bpy.data.curves.new(name="CelestialArcs", type='CURVE')
+    c.dimensions = '3D'
+    c.resolution_u = 24
+    for arc_idx in range(6):
+        s = c.splines.new('BEZIER')
+        s.bezier_points.add(6)
+        base_ang = (arc_idx / 6.0) * 2.0 * math.pi
+        for p_i, pt in enumerate(s.bezier_points):
+            t = p_i / 6.0
+            ang = base_ang + (t - 0.5) * 1.8
+            r = 30.0 + 25.0 * math.sin(t * math.pi)
+            z = 35.0 + 15.0 * math.cos(t * math.pi)
+            pt.co = Vector((math.cos(ang)*r, math.sin(ang)*r, z))
+            pt.handle_left_type = 'AUTO'
+            pt.handle_right_type = 'AUTO'
+    c.extrude = 0.08
+    c.bevel_depth = 0.04
+    arc_obj = bpy.data.objects.new("CelestialArcsObj", c)
+    bpy.context.collection.objects.link(arc_obj)
+    bpy.context.view_layer.objects.active = arc_obj
+    bpy.ops.object.convert(target='MESH')
+    ring_objs.append(arc_obj)
+    
+    # Join into single asset
+    bpy.ops.object.select_all(action='DESELECT')
+    for ro in ring_objs:
+        ro.select_set(True)
+    bpy.context.view_layer.objects.active = ring_objs[0]
+    bpy.ops.object.join()
+    master_arcs = ring_objs[0]
+    master_arcs.name = "SkyCelestialArcs"
+    m = bpy.data.materials.new(name="SkyCelestialArcsMat")
+    master_arcs.data.materials.append(m)
+    export_asset(master_arcs, path)
+
+# --- 3. ATMOSPHERIC BLAST WAVE (3D LAYERED SHOCK FRONT) ---
+def create_atmospheric_blast_wave(path):
+    reset_blend()
+    # 3-tier stepped parabolic shock wave front
+    tiers = [
+        (3.5, 0.15, 0.4),
+        (5.5, 0.22, 1.2),
+        (8.0, 0.30, 2.4)
+    ]
+    tier_objs = []
+    for r_maj, r_min, z_off in tiers:
+        bpy.ops.mesh.primitive_torus_add(major_radius=r_maj, minor_radius=r_min, major_segments=36, minor_segments=8, location=(0, 0, z_off))
+        t_obj = bpy.context.active_object
+        t_obj.scale = Vector((1.0, 1.0, 0.65))
+        bpy.ops.object.transform_apply(scale=True)
+        tier_objs.append(t_obj)
+        
+    bpy.ops.object.select_all(action='DESELECT')
+    for to in tier_objs:
+        to.select_set(True)
+    bpy.context.view_layer.objects.active = tier_objs[0]
+    bpy.ops.object.join()
+    wave_obj = tier_objs[0]
+    wave_obj.name = "AtmosphericBlastWave"
+    m = bpy.data.materials.new(name="AtmosphericBlastMat")
+    wave_obj.data.materials.append(m)
+    export_asset(wave_obj, path)
+
+# --- 4. SKY CATACLYSM BURST (UPPER ATMOSPHERE SHOCKWAVE DISK) ---
+def create_sky_cataclysm_burst(path):
+    reset_blend()
+    # Multi-blade radiating starburst disk with fluted outer shock ring
+    bpy.ops.mesh.primitive_circle_add(vertices=64, radius=35.0, fill_type='NGON', location=(0, 0, 38.0))
+    burst_disk = bpy.context.active_object
+    
+    bpy.ops.mesh.primitive_torus_add(major_radius=36.0, minor_radius=1.8, major_segments=48, minor_segments=8, location=(0, 0, 38.0))
+    burst_ring = bpy.context.active_object
+    
+    bpy.ops.object.select_all(action='DESELECT')
+    burst_disk.select_set(True)
+    burst_ring.select_set(True)
+    bpy.context.view_layer.objects.active = burst_disk
+    bpy.ops.object.join()
+    burst_obj = burst_disk
+    burst_obj.name = "SkyCataclysmBurst"
+    m = bpy.data.materials.new(name="SkyCataclysmBurstMat")
+    burst_obj.data.materials.append(m)
+    export_asset(burst_obj, path)
+
 def main():
     project_root = "/Users/ramteja/Documents/Blender exp game"
     lib_dir = os.path.join(project_root, "assets", "ultimate", "blender")
@@ -281,6 +456,12 @@ def main():
     create_fluted_ring("SkyEnergySpiral", 45.0, 3.0, os.path.join(lib_dir, "sky_energy_spiral.glb"))
     create_ground_energy_cracks(os.path.join(lib_dir, "aftershock_energy.glb"))
 
+    # 4. NEW HERO TOUCH-UP ASSETS
+    create_player_to_sky_energy_stream(os.path.join(lib_dir, "player_to_sky_energy_stream.glb"))
+    create_sky_celestial_arcs(os.path.join(lib_dir, "sky_celestial_arcs.glb"))
+    create_atmospheric_blast_wave(os.path.join(lib_dir, "atmospheric_blast_wave.glb"))
+    create_sky_cataclysm_burst(os.path.join(lib_dir, "sky_cataclysm_burst.glb"))
+
     # Also keep vfx dir aliases in sync
     export_asset(make_fine_energy_filaments("AuraSpiralRibbonsMesh", 4, 0.35, 2.2, 2.8), os.path.join(vfx_dir, "aura_ribbon_mesh.glb"))
     create_fluted_ring("ExpandingShockwaveRing", 2.2, 0.08, os.path.join(vfx_dir, "expanding_shockwave_ring.glb"))
@@ -308,3 +489,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
