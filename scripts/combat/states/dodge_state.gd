@@ -31,7 +31,7 @@ func enter(_msg: Dictionary = {}) -> void:
 	character.velocity.x = _dodge_direction.x * character.character_data.dodge_speed
 	character.velocity.z = _dodge_direction.z * character.character_data.dodge_speed
 
-	character.play_dodge_animation()
+	character.play_dodge_animation(_dodge_direction)
 
 func exit() -> void:
 	if character:

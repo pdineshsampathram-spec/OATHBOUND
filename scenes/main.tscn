@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" path="res://scenes/arena/ruined_fortress_arena.tscn" id="2_arena"]
+[ext_resource type="PackedScene" path="res://scenes/arena/ruined_fortress_100m.tscn" id="2_arena"]
 [ext_resource type="Script" path="res://scripts/combat/match_manager.gd" id="3_match"]
 [ext_resource type="PackedScene" path="res://scenes/test/test_dummy.tscn" id="4_dummy"]
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
@@ -9,7 +9,7 @@
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
-[node name="RuinedFortressArena" parent="." instance=ExtResource("2_arena")]
+[node name="RuinedFortress100m" parent="." instance=ExtResource("2_arena")]
 
 [node name="MatchManager" type="Node" parent="."]
 script = ExtResource("3_match")
@@ -19,20 +19,20 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4)
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 
-[node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 8)
+[node name="Spawn1_Central" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -16)
 
-[node name="Spawn2" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0, -8)
+[node name="Spawn2_WestRuins" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0.5, 8)
 
-[node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 8, 0, 0)
+[node name="Spawn3_EastCourtyard" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0.5, -8)
 
-[node name="Spawn4" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -8, 0, 0)
+[node name="Spawn4_SouthGate" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 34)
 
-[node name="Spawn5" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+[node name="Spawn5_Battlements" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.5, -36)
 
 [node name="Players" type="Node3D" parent="."]
 

@@ -27,6 +27,7 @@
 [ext_resource type="PackedScene" path="res://assets/characters/weapons/hero_kite_shield.glb" id="25_shield"]
 [ext_resource type="PackedScene" path="res://assets/characters/weapons/great_axe.glb" id="26_axe"]
 [ext_resource type="PackedScene" path="res://assets/characters/weapons/dagger.glb" id="27_dagger"]
+[ext_resource type="Script" path="res://scripts/combat/states/ultimate_captured_state.gd" id="28_ultcap"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
 properties/0/path = NodePath(".:sync_position")
@@ -224,3 +225,6 @@ script = ExtResource("20_finisher")
 
 [node name="DeadState" type="Node" parent="StateMachine"]
 script = ExtResource("21_dead")
+
+[node name="UltimateCapturedState" type="Node" parent="StateMachine"]
+script = ExtResource("28_ultcap")

@@ -1,6 +1,8 @@
 class_name PlayerController
 extends CharacterBody3D
 
+const PowerVFXSystem = preload("res://scripts/vfx/power_vfx_system.gd")
+
 ## PlayerController — Server-authoritative multiplayer combat controller.
 ## Server owns damage, hits, stamina, health, poise, energy, abilities, and combat state transitions.
 ## Reuses identical controller logic across all 3 archetypes (Knight, Berserker, Shadow Warrior).
@@ -35,6 +37,8 @@ const DamageNumber = preload("res://scripts/ui/damage_number.gd")
 @onready var synchronizer: MultiplayerSynchronizer = $MultiplayerSynchronizer
 
 var _anim_player: AnimationPlayer = null
+var ai_controller: Node = null
+@export var is_ai: bool = false
 
 # Network Synchronized Variables (Server -> Clients)
 @export var sync_position: Vector3 = Vector3.ZERO
@@ -60,6 +64,13 @@ var is_finisher_vulnerable: bool = false
 var is_parry_empowered: bool = false
 var block_active_duration: float = 999.0
 
+# Centralized Authoritative Player Control Locks
+var player_input_locked: bool = false
+var movement_locked: bool = false
+var attack_locked: bool = false
+var ability_locked: bool = false
+var dodge_locked: bool = false
+
 # Poise system
 var current_poise: float = 65.0
 var _poise_regen_timer: float = 0.0
@@ -81,9 +92,29 @@ var network_wants_finisher: bool = false
 var network_requested_ability_slot: int = -1
 var network_dodge_dir: Vector3 = Vector3.ZERO
 
+# Tunable Combat Parameters
+@export var parry_window: float = 0.12
+@export var dodge_iframes: float = 0.25
+@export var combo_buffer_window: float = 0.30
+@export var light_hitstop: float = 0.03
+@export var heavy_hitstop: float = 0.07
+@export var parry_hitstop: float = 0.08
+@export var finisher_hitstop: float = 0.15
+
+# Stance & Combo State
+var is_combat_stance: bool = false
+var _combat_stance_timer: float = 0.0
+var combo_step: int = 1
+var _combo_buffer_timer: float = 0.0
+
 # Local input tracking for charge/heavy detection
 var _local_attack_press_time: float = 0.0
 var _local_attack_held: bool = false
+
+# Swept Blade Trajectory Tracking
+var _prev_blade_tip: Vector3 = Vector3.ZERO
+var _prev_blade_base: Vector3 = Vector3.ZERO
+var _is_sweeping_blade: bool = false
 
 var _attack_tween: Tween = null
 var _dodge_tween: Tween = null
@@ -104,16 +135,17 @@ func _ready() -> void:
 
 	var is_mp_active: bool = multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if is_mp_active:
-		is_local_player = (multiplayer.get_unique_id() == peer_id)
+		is_local_player = (multiplayer.get_unique_id() == peer_id) and not is_ai and not name.begins_with("Enemy")
 		is_server_authority = multiplayer.is_server()
 	else:
-		is_local_player = true
+		is_local_player = not is_ai and not name.begins_with("Enemy") and (name == "1" or name == "Player" or (get_parent() and get_parent().name == "Players"))
 		is_server_authority = true
 
 	if camera_rig:
 		camera_rig.setup_authority(is_local_player)
 
 	_apply_character_data()
+	_attach_weapons_to_skeleton()
 
 	if sword_hitbox:
 		sword_hitbox.monitoring = false
@@ -186,10 +218,46 @@ func _apply_hero_materials() -> void:
 				var m_name: String = orig_mat.resource_name if orig_mat else ""
 				if "Leather" in m_name:
 					mi.set_surface_override_material(s, leather_mat)
-				elif "Tabard" in m_name or "Cloth" in m_name or "Fabric" in m_name:
-					mi.set_surface_override_material(s, tabard_mat)
 				else:
 					mi.set_surface_override_material(s, steel_mat)
+
+func _attach_weapons_to_skeleton() -> void:
+	if not knight_model:
+		return
+	var skel: Skeleton3D = knight_model.find_child("Skeleton3D", true, false) as Skeleton3D
+	if not skel:
+		for child in knight_model.get_children():
+			if child is Skeleton3D:
+				skel = child
+				break
+			elif child.get_node_or_null("Skeleton3D"):
+				skel = child.get_node("Skeleton3D")
+				break
+
+	if not skel:
+		return
+
+	# Physically bind sword pivot to right hand bone
+	var hand_idx: int = skel.find_bone("Hand.R")
+	if hand_idx >= 0 and sword_pivot and sword_pivot.get_parent() != skel:
+		var bone_attach: BoneAttachment3D = BoneAttachment3D.new()
+		bone_attach.name = "BoneAttach_HandR"
+		bone_attach.bone_name = "Hand.R"
+		skel.add_child(bone_attach)
+		sword_pivot.reparent(bone_attach)
+		sword_pivot.position = Vector3(0, 0, 0)
+		sword_pivot.rotation = Vector3.ZERO
+
+	# Physically bind shield mesh to left forearm bone
+	var forearm_idx: int = skel.find_bone("Forearm.L")
+	if forearm_idx >= 0 and shield_mesh and shield_mesh.get_parent() != skel:
+		var shield_attach: BoneAttachment3D = BoneAttachment3D.new()
+		shield_attach.name = "BoneAttach_ForearmL"
+		shield_attach.bone_name = "Forearm.L"
+		skel.add_child(shield_attach)
+		shield_mesh.reparent(shield_attach)
+		shield_mesh.position = Vector3(0, 0, 0)
+		shield_mesh.rotation = Vector3.ZERO
 
 func _configure_visual_archetype() -> void:
 	if not character_data or not visual_pivot:
@@ -225,8 +293,14 @@ func _configure_visual_archetype() -> void:
 			if dagger_mesh: dagger_mesh.visible = true
 
 func _physics_process(delta: float) -> void:
+	if _combat_stance_timer > 0.0:
+		_combat_stance_timer -= delta
+		if _combat_stance_timer <= 0.0:
+			is_combat_stance = false
+
 	if is_server_authority:
 		_process_poise_regen(delta)
+		_process_swept_blade_hits()
 
 		sync_position = global_position
 		sync_velocity = velocity
@@ -283,14 +357,49 @@ func _on_death() -> void:
 	if state_machine:
 		state_machine.transition_to("DeadState")
 
+# --- Authoritative Player Control Management ---
+
+func force_restore_player_control() -> void:
+	player_input_locked = false
+	movement_locked = false
+	attack_locked = false
+	ability_locked = false
+	dodge_locked = false
+	
+	network_move_input = Vector2.ZERO
+	network_is_sprinting = false
+	network_wants_attack = false
+	network_attack_held = false
+	network_wants_heavy = false
+	network_wants_charged = false
+	network_wants_block = false
+	network_wants_dodge = false
+	network_wants_finisher = false
+	network_requested_ability_slot = -1
+	_local_attack_held = false
+	_local_attack_press_time = 0.0
+	is_blocking = false
+	block_active_duration = 999.0
+
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap:
+		ap.speed_scale = 1.0
+
+	if not is_dead and state_machine:
+		var curr_name: String = state_machine.get_current_state_name()
+		if curr_name == "AbilityState" or curr_name == "UltimateCapturedState" or curr_name == "FinisherState":
+			state_machine.transition_to("IdleState")
+
 # --- Client Input Transmission ---
 
 func _send_client_inputs(delta: float) -> void:
-	if is_dead:
+	if is_dead or player_input_locked:
 		return
 
-	var move_in: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var is_sprint: bool = Input.is_action_pressed("sprint")
+	var move_in: Vector2 = Vector2.ZERO
+	if not movement_locked:
+		move_in = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var is_sprint: bool = Input.is_action_pressed("sprint") if not movement_locked else false
 	
 	var cam_dir: Vector3 = Vector3.ZERO
 	if move_in.length_squared() > 0.01 and camera_rig:
@@ -298,32 +407,33 @@ func _send_client_inputs(delta: float) -> void:
 
 	rpc_id(1, "server_receive_movement", move_in, cam_dir, is_sprint)
 
-	if Input.is_action_just_pressed("attack"):
-		_local_attack_held = true
-		_local_attack_press_time = 0.0
-		rpc_id(1, "server_receive_attack_press", true)
+	if not attack_locked:
+		if Input.is_action_just_pressed("attack"):
+			_local_attack_held = true
+			_local_attack_press_time = 0.0
+			rpc_id(1, "server_receive_attack_press", true)
 
-	if _local_attack_held and character_data:
-		_local_attack_press_time += delta
-		if _local_attack_press_time >= character_data.charged_attack_min_charge:
-			rpc_id(1, "server_receive_charged_attack")
+		if _local_attack_held and character_data:
+			_local_attack_press_time += delta
+			if _local_attack_press_time >= character_data.charged_attack_min_charge:
+				rpc_id(1, "server_receive_charged_attack")
 
-	if Input.is_action_just_released("attack") and character_data:
-		_local_attack_held = false
-		rpc_id(1, "server_receive_attack_press", false)
-		if _local_attack_press_time < 0.25:
-			rpc_id(1, "server_receive_attack")
-		elif _local_attack_press_time >= 0.25 and _local_attack_press_time < character_data.charged_attack_min_charge:
+		if Input.is_action_just_released("attack") and character_data:
+			_local_attack_held = false
+			rpc_id(1, "server_receive_attack_press", false)
+			if _local_attack_press_time < 0.25:
+				rpc_id(1, "server_receive_attack")
+			elif _local_attack_press_time >= 0.25 and _local_attack_press_time < character_data.charged_attack_min_charge:
+				rpc_id(1, "server_receive_heavy_attack")
+
+		if Input.is_action_just_pressed("heavy_attack"):
 			rpc_id(1, "server_receive_heavy_attack")
 
-	if Input.is_action_just_pressed("heavy_attack"):
-		rpc_id(1, "server_receive_heavy_attack")
-
-	var wants_blk: bool = Input.is_action_pressed("block")
+	var wants_blk: bool = Input.is_action_pressed("block") if not attack_locked else false
 	if wants_blk != is_blocking:
 		rpc_id(1, "server_receive_block", wants_blk)
 
-	if Input.is_action_just_pressed("dodge"):
+	if not dodge_locked and Input.is_action_just_pressed("dodge"):
 		var d_dir: Vector3 = cam_dir if cam_dir.length_squared() > 0.01 else -visual_pivot.global_transform.basis.z.normalized()
 		rpc_id(1, "server_receive_dodge", d_dir)
 
@@ -402,79 +512,113 @@ func server_receive_ability_slot(slot: int) -> void:
 # --- State Machine Input Query Helpers (Server-side) ---
 
 func get_movement_input() -> Vector2:
-	if is_dead:
+	if is_dead or player_input_locked or movement_locked:
 		return Vector2.ZERO
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("get_move_input"):
+			return ai_controller.get_move_input()
+		return Vector2.ZERO
+	if is_local_player:
 		return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	return network_move_input
 
 func is_sprinting_held() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or movement_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("is_sprinting_held"):
+			return ai_controller.is_sprinting_held()
+		return false
+	if is_local_player:
 		return Input.is_action_pressed("sprint")
 	return network_is_sprinting
 
 func wants_attack() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or attack_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_attack"):
+			return ai_controller.wants_attack()
+		return false
+	if is_local_player:
 		return Input.is_action_just_pressed("attack")
 	var res: bool = network_wants_attack
 	network_wants_attack = false
 	return res
 
 func is_attack_held() -> bool:
-	if is_local_player and is_server_authority:
+	if is_dead or player_input_locked or attack_locked:
+		return false
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_attack"):
+			return ai_controller.wants_attack()
+		return false
+	if is_local_player:
 		return Input.is_action_pressed("attack")
 	return network_attack_held
 
 func wants_heavy_attack() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or attack_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_heavy_attack"):
+			return ai_controller.wants_heavy_attack()
+		return false
+	if is_local_player:
 		return Input.is_action_just_pressed("heavy_attack")
 	var res: bool = network_wants_heavy
 	network_wants_heavy = false
 	return res
 
 func wants_charged_attack() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or attack_locked:
 		return false
 	var res: bool = network_wants_charged
 	network_wants_charged = false
 	return res
 
 func wants_block() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or attack_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_block"):
+			return ai_controller.wants_block()
+		return false
+	if is_local_player:
 		return Input.is_action_pressed("block")
 	return network_wants_block
 
 func wants_dodge() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or dodge_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_dodge"):
+			return ai_controller.wants_dodge()
+		return false
+	if is_local_player:
 		return Input.is_action_just_pressed("dodge")
 	var res: bool = network_wants_dodge
 	network_wants_dodge = false
 	return res
 
 func wants_finisher() -> bool:
-	if is_dead:
+	if is_dead or player_input_locked or attack_locked:
 		return false
-	if is_local_player and is_server_authority:
+	if is_ai or ai_controller:
+		if ai_controller and ai_controller.has_method("wants_finisher"):
+			return ai_controller.wants_finisher()
+		return false
+	if is_local_player:
 		return Input.is_action_just_pressed("finisher")
 	var res: bool = network_wants_finisher
 	network_wants_finisher = false
 	return res
 
 func get_requested_ability_slot() -> int:
-	if is_dead or not ability_system:
+	if is_dead or player_input_locked or ability_locked or not ability_system:
 		return -1
 
-	if is_local_player and is_server_authority:
+	if is_local_player:
 		if Input.is_action_just_pressed("ability_1") and ability_system.can_cast(0):
 			return 0
 		elif Input.is_action_just_pressed("ability_2") and ability_system.can_cast(1):
@@ -484,7 +628,6 @@ func get_requested_ability_slot() -> int:
 		elif Input.is_action_just_pressed("ultimate") and ability_system.can_cast(3):
 			return 3
 		return -1
-
 	var res: int = network_requested_ability_slot
 	network_requested_ability_slot = -1
 	return res
@@ -546,7 +689,23 @@ func rotate_towards_direction(direction: Vector3, delta: float) -> void:
 
 	var target_angle: float = atan2(-direction.x, -direction.z)
 	var rot_speed: float = character_data.rotation_speed if character_data else 12.0
-	visual_pivot.rotation.y = lerp_angle(visual_pivot.rotation.y, target_angle, rot_speed * delta)
+
+	# State-dependent turning clamping
+	if current_attack_type == AttackType.HEAVY and (_is_sweeping_blade or (sword_hitbox and sword_hitbox.monitoring)):
+		rot_speed = 0.0 # Strictly committed / locked during heavy smash
+	elif current_attack_type == AttackType.CHARGED and (_is_sweeping_blade or (sword_hitbox and sword_hitbox.monitoring)):
+		rot_speed = 0.0 # Locked during charged lunge
+	elif _is_sweeping_blade:
+		rot_speed = minf(rot_speed, 2.5) # Restricted during light attack active frames
+	elif is_combat_stance:
+		rot_speed = minf(rot_speed, 7.5) # Controlled in combat stance
+
+	if rot_speed > 0.0:
+		visual_pivot.rotation.y = lerp_angle(visual_pivot.rotation.y, target_angle, rot_speed * delta)
+
+func enter_combat_stance(duration: float = 4.0) -> void:
+	is_combat_stance = true
+	_combat_stance_timer = duration
 
 # --- Finisher Target Evaluation ---
 
@@ -571,7 +730,7 @@ func find_nearby_finisher_target() -> Node:
 				if p.is_finisher_vulnerable or is_crit_hp:
 					closest = p
 					min_dist = dist
-		elif peer_node.name.to_lower().contains("dummy"):
+		elif peer_node.name.to_lower().contains("dummy") or peer_node.name.to_lower().contains("pell"):
 			var dist: float = global_position.distance_to(peer_node.global_position)
 			if dist <= min_dist:
 				closest = peer_node
@@ -579,13 +738,47 @@ func find_nearby_finisher_target() -> Node:
 
 	return closest
 
-# --- Hitbox & Server-Authoritative Damage ---
+# --- Swept Blade Trajectory & Server-Authoritative Damage ---
 
 func set_sword_hitbox_active(active: bool) -> void:
 	if sword_hitbox and is_server_authority:
-		sword_hitbox.monitoring = active
+		sword_hitbox.set_deferred("monitoring", active)
+	_is_sweeping_blade = active
 	if active:
 		_hit_targets_this_swing.clear()
+		_prev_blade_tip = _get_blade_tip_pos()
+		_prev_blade_base = _get_blade_base_pos()
+
+func _get_blade_tip_pos() -> Vector3:
+	if sword_pivot:
+		return sword_pivot.global_transform * Vector3(0, 0.9, -0.6)
+	return global_position + Vector3(0, 1.2, -1.0)
+
+func _get_blade_base_pos() -> Vector3:
+	if sword_pivot:
+		return sword_pivot.global_transform.origin
+	return global_position + Vector3(0, 1.0, 0)
+
+func _process_swept_blade_hits() -> void:
+	if not _is_sweeping_blade or not is_server_authority:
+		return
+	var curr_tip: Vector3 = _get_blade_tip_pos()
+	var curr_base: Vector3 = _get_blade_base_pos()
+
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	if space_state:
+		var query_tip = PhysicsRayQueryParameters3D.create(_prev_blade_tip, curr_tip, 7, [self.get_rid()])
+		var res_tip = space_state.intersect_ray(query_tip)
+		if res_tip and res_tip.collider:
+			_try_deal_damage(res_tip.collider)
+
+		var query_diag = PhysicsRayQueryParameters3D.create(_prev_blade_base, curr_tip, 7, [self.get_rid()])
+		var res_diag = space_state.intersect_ray(query_diag)
+		if res_diag and res_diag.collider:
+			_try_deal_damage(res_diag.collider)
+
+	_prev_blade_tip = curr_tip
+	_prev_blade_base = curr_base
 
 func _on_sword_hitbox_area_entered(area: Area3D) -> void:
 	if not is_server_authority:
@@ -612,12 +805,18 @@ func _try_deal_damage(target: Node) -> void:
 			if is_parry_empowered:
 				base_dmg *= 1.5
 				poise_dmg *= 1.5
+			trigger_presentation_hitstop(light_hitstop)
 		AttackType.HEAVY:
 			base_dmg = character_data.heavy_attack_damage
 			poise_dmg = character_data.heavy_attack_poise_damage
+			trigger_presentation_hitstop(heavy_hitstop)
 		AttackType.CHARGED, AttackType.CHARGED_KNOCKDOWN:
 			base_dmg = lerpf(character_data.charged_attack_damage_min, character_data.charged_attack_damage_max, current_charge_ratio)
 			poise_dmg = lerpf(character_data.light_attack_poise_damage, character_data.charged_attack_poise_damage_max, current_charge_ratio)
+			trigger_presentation_hitstop(heavy_hitstop)
+		AttackType.FINISHER:
+			base_dmg = 999.0
+			trigger_presentation_hitstop(finisher_hitstop)
 
 	if ability_system:
 		base_dmg *= ability_system.get_outgoing_damage_multiplier()
@@ -630,6 +829,15 @@ func _try_deal_damage(target: Node) -> void:
 		var hc: HealthComponent = target.get_node("HealthComponent") as HealthComponent
 		if hc:
 			hc.take_damage(base_dmg, self)
+
+func trigger_presentation_hitstop(duration: float) -> void:
+	if duration <= 0.001:
+		return
+	# Delegate to centralized CombatTimeController — no direct Engine.time_scale mutation
+	var ctc: Node = get_node_or_null("/root/CombatTimeController")
+	if ctc and ctc.has_method("trigger_hitstop"):
+		ctc.trigger_hitstop(duration)
+	# If CombatTimeController is not available (e.g. testing), do nothing rather than risk a leak
 
 func take_damage_complex(amount: float, attacker: Node = null, atk_type: AttackType = AttackType.LIGHT, poise_dmg: float = 12.0) -> float:
 	if is_dead:
@@ -702,7 +910,7 @@ func _get_anim_player() -> AnimationPlayer:
 	if _anim_player and is_instance_valid(_anim_player):
 		return _anim_player
 	if knight_model:
-		_anim_player = knight_model.get_node_or_null("AnimationPlayer")
+		_anim_player = knight_model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	return _anim_player
 
 func _play_skeletal_animation(anim_name: String, custom_blend: float = 0.15) -> void:
@@ -711,102 +919,113 @@ func _play_skeletal_animation(anim_name: String, custom_blend: float = 0.15) -> 
 		ap.play(anim_name, custom_blend)
 
 func play_attack_animation() -> void:
-	_play_skeletal_animation("light_attack")
+	enter_combat_stance()
+	var anim_name: String = "light_attack_%d" % combo_step
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap and ap.has_animation(anim_name):
+		_play_skeletal_animation(anim_name, 0.08)
+	else:
+		_play_skeletal_animation("light_attack_1", 0.08)
+
+	combo_step = (combo_step % 3) + 1
+
 	if combat_audio: combat_audio.play_sword_swing()
-	if not sword_pivot:
-		return
-	if _attack_tween and _attack_tween.is_valid():
-		_attack_tween.kill()
-
-	_attack_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(65.0), 0.1)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(20.0), 0.1)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(-85.0), 0.15)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(-15.0), 0.15)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.2)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.2)
-
-	if left_hand_pivot and left_hand_pivot.visible:
-		var l_tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		l_tween.tween_property(left_hand_pivot, "rotation:y", deg_to_rad(-65.0), 0.1)
-		l_tween.tween_property(left_hand_pivot, "rotation:y", deg_to_rad(75.0), 0.15)
-		l_tween.tween_property(left_hand_pivot, "rotation:y", 0.0, 0.2)
+	# Skeletal animation drives all body + weapon motion — no tween overrides
 
 func play_heavy_attack_animation() -> void:
-	_play_skeletal_animation("heavy_attack")
+	enter_combat_stance()
+	_play_skeletal_animation("heavy_attack", 0.10)
 	if combat_audio: combat_audio.play_sword_swing()
-	if not sword_pivot:
-		return
-	if _attack_tween and _attack_tween.is_valid():
-		_attack_tween.kill()
-
-	_attack_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-90.0), 0.28)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(45.0), 0.28)
-	_attack_tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(45.0), 0.22)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", deg_to_rad(-60.0), 0.22)
-	_attack_tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.35)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:y", 0.0, 0.35)
+	# Skeletal animation drives the full-body heavy attack — no tween overrides
 
 func play_charge_buildup_animation() -> void:
-	_play_skeletal_animation("idle")
-	if not sword_pivot:
-		return
-	if _charge_tween and _charge_tween.is_valid():
-		_charge_tween.kill()
-
-	_charge_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_charge_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(110.0), 0.4)
-	_charge_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(35.0), 0.4)
-	_charge_tween.parallel().tween_property(visual_pivot, "scale", Vector3(1.08, 1.08, 1.08), 0.4)
+	enter_combat_stance()
+	# Play charged attack start — the skeletal animation handles the sword raise/coil
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap and ap.has_animation("charged_attack"):
+		ap.play("charged_attack", 0.1)
+		ap.speed_scale = 0.3  # Slow the first half for charge buildup
+	else:
+		_play_skeletal_animation("combat_idle", 0.1)
 
 func play_charged_attack_release_animation(_ratio: float) -> void:
-	_play_skeletal_animation("heavy_attack")
+	enter_combat_stance()
+	_play_skeletal_animation("charged_attack", 0.08)
 	if combat_audio: combat_audio.play_sword_swing()
 	stop_charge_visual()
-	if not sword_pivot:
-		return
-	if _attack_tween and _attack_tween.is_valid():
-		_attack_tween.kill()
-
-	_attack_tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", deg_to_rad(-120.0), 0.2)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", deg_to_rad(-30.0), 0.2)
-	_attack_tween.tween_property(sword_pivot, "rotation:y", 0.0, 0.4)
-	_attack_tween.parallel().tween_property(sword_pivot, "rotation:z", 0.0, 0.4)
+	# Restore animation speed for explosive release
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap:
+		ap.speed_scale = 1.0 + (_ratio * 0.3)  # Faster release at higher charge
 
 func stop_charge_visual() -> void:
-	if _charge_tween and _charge_tween.is_valid():
-		_charge_tween.kill()
-	if visual_pivot:
-		visual_pivot.scale = Vector3.ONE
+	# Restore animation speed if it was slowed for charge buildup
+	var ap: AnimationPlayer = _get_anim_player()
+	if ap:
+		ap.speed_scale = 1.0
+
+func play_block_animation() -> void:
+	enter_combat_stance()
+	_play_skeletal_animation("block", 0.1)
+
+func play_block_impact_animation() -> void:
+	_play_skeletal_animation("block_hit", 0.05)
+	if combat_audio: combat_audio.play_shield_block()
 
 func play_parry_success_animation() -> void:
-	_play_skeletal_animation("parry")
+	enter_combat_stance()
+	_play_skeletal_animation("parry", 0.05)
+	trigger_presentation_hitstop(parry_hitstop)
 	ImpactVFX.spawn_parry_flash(self, global_position + Vector3(0, 1.2, 0.4))
 	if combat_audio: combat_audio.play_parry()
 
 	if shield_mesh and shield_mesh.visible:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tween.tween_property(shield_mesh, "position:z", -0.6, 0.1)
-		tween.tween_property(shield_mesh, "position:z", -0.2, 0.25)
-	elif sword_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-45.0), 0.1)
-		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.25)
+		tween.tween_property(shield_mesh, "position:z", -0.45, 0.08)
+		tween.tween_property(shield_mesh, "position:z", -0.15, 0.2)
 
-func play_dodge_animation() -> void:
-	_play_skeletal_animation("dodge")
+func play_dodge_animation(dir: Vector3 = Vector3.ZERO) -> void:
+	enter_combat_stance()
+	# Use directional skeletal dodge animations — no barrel-roll tween
+	var local_dir: Vector3 = visual_pivot.global_transform.basis.inverse() * dir
+	if abs(local_dir.x) > abs(local_dir.z):
+		if local_dir.x > 0: _play_skeletal_animation("dodge_r", 0.08)
+		else: _play_skeletal_animation("dodge_l", 0.08)
+	else:
+		if local_dir.z > 0: _play_skeletal_animation("dodge_bwd", 0.08)
+		else: _play_skeletal_animation("dodge_fwd", 0.08)
+
 	ImpactVFX.spawn_dodge_dust(self, global_position)
 	if combat_audio: combat_audio.play_dodge()
-	if not visual_pivot:
-		return
-	if _dodge_tween and _dodge_tween.is_valid():
-		_dodge_tween.kill()
 
-	_dodge_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_dodge_tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(-360.0), character_data.dodge_duration if character_data else 0.4)
-	_dodge_tween.tween_callback(func(): visual_pivot.rotation.x = 0.0)
+func play_hit_reaction_animation(incoming_dir: Vector3 = Vector3.ZERO) -> void:
+	enter_combat_stance()
+	# Directional skeletal hit reactions — no positional slide tween
+	var local_dir: Vector3 = visual_pivot.global_transform.basis.inverse() * incoming_dir
+	if abs(local_dir.x) > abs(local_dir.z):
+		if local_dir.x > 0: _play_skeletal_animation("hit_react_right", 0.05)
+		else: _play_skeletal_animation("hit_react_left", 0.05)
+	else:
+		if local_dir.z > 0: _play_skeletal_animation("hit_react_back", 0.05)
+		else: _play_skeletal_animation("hit_react_front", 0.05)
+
+	if combat_audio: combat_audio.play_flesh_hit()
+
+func play_stagger_animation() -> void:
+	enter_combat_stance()
+	_play_skeletal_animation("stagger", 0.08)
+	if combat_audio: combat_audio.play_armor_hit()
+
+func play_knockdown_animation() -> void:
+	enter_combat_stance()
+	_play_skeletal_animation("knockdown", 0.1)
+	if combat_audio: combat_audio.play_armor_hit()
+
+func play_finisher_animation() -> void:
+	enter_combat_stance()
+	_play_skeletal_animation("finisher", 0.05)
+	trigger_presentation_hitstop(finisher_hitstop)
+	if combat_audio: combat_audio.play_sword_swing()
 
 func set_guard_visual(active: bool) -> void:
 	if active:
@@ -825,80 +1044,32 @@ func set_guard_visual(active: bool) -> void:
 		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(sword_pivot, "rotation:z", target_rot_z, 0.15)
 
-func play_stagger_animation() -> void:
-	if not visual_pivot:
-		return
-	if _reaction_tween and _reaction_tween.is_valid():
-		_reaction_tween.kill()
-
-	_reaction_tween = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	_reaction_tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(-25.0), 0.15)
-	_reaction_tween.parallel().tween_property(visual_pivot, "rotation:y", deg_to_rad(20.0), 0.15)
-	_reaction_tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.4)
-	_reaction_tween.parallel().tween_property(visual_pivot, "rotation:y", 0.0, 0.4)
-
 func play_stun_animation() -> void:
-	if not visual_pivot:
-		return
-	if _reaction_tween and _reaction_tween.is_valid():
-		_reaction_tween.kill()
-
-	_reaction_tween = create_tween().set_loops(3).set_trans(Tween.TRANS_SINE)
-	_reaction_tween.tween_property(visual_pivot, "rotation:z", deg_to_rad(10.0), 0.1)
-	_reaction_tween.tween_property(visual_pivot, "rotation:z", deg_to_rad(-10.0), 0.1)
-	_reaction_tween.chain().tween_property(visual_pivot, "rotation:z", 0.0, 0.1)
-
-func play_knockdown_animation() -> void:
-	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(-90.0), 0.3)
-		tween.parallel().tween_property(visual_pivot, "position:y", -0.7, 0.3)
+	# Use stagger animation for stun — skeleton drives the dazed look
+	_play_skeletal_animation("stagger", 0.08)
 
 func play_get_up_animation() -> void:
-	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.5)
-		tween.parallel().tween_property(visual_pivot, "position:y", 0.0, 0.5)
+	# Play combat_idle to smoothly get up from knockdown
+	_play_skeletal_animation("combat_idle", 0.25)
 
 func reset_knockdown_visual() -> void:
-	if visual_pivot:
-		visual_pivot.rotation.x = 0.0
-		visual_pivot.position.y = 0.0
-
-func play_finisher_animation() -> void:
-	if not sword_pivot:
-		return
-	var tween: Tween = create_tween().set_trans(Tween.TRANS_CIRC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(visual_pivot, "position:y", 0.8, 0.3)
-	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(-110.0), 0.3)
-	tween.tween_property(visual_pivot, "position:y", 0.0, 0.25)
-	tween.parallel().tween_property(sword_pivot, "rotation:x", deg_to_rad(60.0), 0.25)
-	tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.5)
+	pass  # Skeleton handles all visual reset — no manual pivot manipulation needed
 
 # --- Ability Animations ---
 
 func play_ability_cast_animation() -> void:
-	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		tween.tween_property(visual_pivot, "scale", Vector3(1.15, 1.15, 1.15), 0.2)
-		tween.tween_property(visual_pivot, "scale", Vector3.ONE, 0.2)
+	# Use combat_idle with a subtle speed variation for casting feel
+	_play_skeletal_animation("combat_idle", 0.1)
 
 func play_dash_strike_animation() -> void:
-	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(25.0), 0.15)
-		tween.tween_property(visual_pivot, "rotation:x", 0.0, 0.3)
-	if shield_mesh and shield_mesh.visible:
-		var s_tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		s_tween.tween_property(shield_mesh, "position:z", -0.7, 0.15)
-		s_tween.tween_property(shield_mesh, "position:z", -0.2, 0.3)
+	# Use heavy_attack animation for charged forward strikes
+	_play_skeletal_animation("heavy_attack", 0.08)
+	if combat_audio: combat_audio.play_sword_swing()
 
 func play_ground_breaker_animation() -> void:
-	if sword_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(-120.0), 0.3)
-		tween.tween_property(sword_pivot, "rotation:x", deg_to_rad(60.0), 0.15)
-		tween.tween_property(sword_pivot, "rotation:x", 0.0, 0.3)
+	# Use charged_attack animation for overhead ground slams
+	_play_skeletal_animation("charged_attack", 0.08)
+	if combat_audio: combat_audio.play_sword_swing()
 
 func play_shadow_step_animation() -> void:
 	if character_mesh and character_mesh.material_override:
@@ -914,31 +1085,11 @@ func stop_ability_visuals() -> void:
 
 @rpc("call_local", "unreliable")
 func rpc_trigger_shockwave_vfx() -> void:
-	if shockwave_mesh:
-		shockwave_mesh.visible = true
-		shockwave_mesh.scale = Vector3(0.1, 1.0, 0.1)
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-		tween.tween_property(shockwave_mesh, "scale", Vector3(1.2, 1.0, 1.2), 0.4)
-		tween.tween_callback(func(): shockwave_mesh.visible = false)
+	PowerVFXSystem.spawn_supernatural_shockwave(get_parent(), global_position, PowerVFXSystem.COLOR_VOID_PRIMARY, 6.0)
 
 @rpc("call_local", "unreliable")
 func rpc_trigger_buff_vfx(color: Color) -> void:
-	if barrier_mesh:
-		barrier_mesh.visible = true
-		var mat: StandardMaterial3D = barrier_mesh.get_surface_override_material(0) as StandardMaterial3D
-		if not mat:
-			mat = StandardMaterial3D.new()
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			barrier_mesh.set_surface_override_material(0, mat)
-		mat.albedo_color = Color(color.r, color.g, color.b, 0.35)
-		mat.emission_enabled = true
-		mat.emission = color
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_SINE)
-		tween.tween_property(barrier_mesh, "scale", Vector3(1.1, 1.1, 1.1), 0.25)
-		tween.tween_property(barrier_mesh, "scale", Vector3.ONE, 0.25)
-		await get_tree().create_timer(3.0).timeout
-		if barrier_mesh:
-			barrier_mesh.visible = false
+	PowerVFXSystem.spawn_character_aura(self, color, 3.0)
 
 @rpc("call_local", "unreliable")
 func rpc_spawn_axe_projectile(spawn_pos: Vector3, dir: Vector3) -> void:
@@ -960,10 +1111,12 @@ func rpc_spawn_axe_projectile(spawn_pos: Vector3, dir: Vector3) -> void:
 	tween.tween_callback(proj.queue_free)
 
 func play_death_animation() -> void:
-	if visual_pivot:
-		var tween: Tween = create_tween().set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-		tween.tween_property(visual_pivot, "rotation:x", deg_to_rad(90.0), 0.4)
-		tween.parallel().tween_property(visual_pivot, "position:y", -0.7, 0.4)
+	# Use knockdown animation for death — skeleton drives the fall
+	_play_skeletal_animation("knockdown", 0.1)
+	# Ensure time_scale is restored in case we were in hitstop/slowmo when dying
+	var ctc: Node = get_node_or_null("/root/CombatTimeController")
+	if ctc and ctc.has_method("force_restore_normal_time"):
+		ctc.force_restore_normal_time()
 
 func _on_remote_state_changed(_prev: String, current: String) -> void:
 	match current:
@@ -983,18 +1136,12 @@ func _on_remote_state_changed(_prev: String, current: String) -> void:
 func rpc_flash_hit() -> void:
 	ImpactVFX.spawn_hit_sparks(self, global_position + Vector3(0, 1.1, 0), false)
 	if combat_audio: combat_audio.play_weapon_impact(false)
-	_play_skeletal_animation("hit_reaction", 0.08)
+	# Use directional hit reaction from skeletal animation
+	_play_skeletal_animation("hit_react_front", 0.05)
 
-	# Client presentation hitstop (0.05s micro-freeze on visual mesh only)
-	var ap: AnimationPlayer = _get_anim_player()
-	if ap:
-		ap.speed_scale = 0.0
-		get_tree().create_timer(0.05).timeout.connect(func(): if ap: ap.speed_scale = 1.0)
-
-	if is_local_player and camera_rig and camera_rig.has_node("SpringArm3D/Camera3D"):
-		var cam: Camera3D = camera_rig.get_node("SpringArm3D/Camera3D")
-		if cam.has_method("trigger_hit_shake"):
-			cam.trigger_hit_shake(false)
+	# Camera response for local player
+	if is_local_player and camera_rig:
+		camera_rig.apply_trauma(0.15)
 
 @rpc("call_local", "unreliable")
 func rpc_flash_shield() -> void:

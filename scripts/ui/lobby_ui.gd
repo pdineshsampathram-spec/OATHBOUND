@@ -98,7 +98,7 @@ func _on_solo_pressed() -> void:
 		"name": NetworkManager.local_player_name,
 		"character": NetworkManager.local_character_choice
 	}
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file("res://scenes/arena/solo_arena.tscn")
 
 func _on_start_pressed() -> void:
 	if multiplayer.is_server():

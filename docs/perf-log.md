@@ -11,3 +11,4 @@
 | 2026-08-22 | Phase 6 Blender Art Pipeline (Tooling & Presets) | 60 | 58 | ~16.6 ms | ~25 | ~45 MB | ~3.0 MB | AssetValidator EditorPlugin & CLI tool, LOD0-LOD3 budgets, 2K texture limits |
 | 2026-08-22 | Phase 6B Realistic Medieval Asset Production | 60 | 58 | ~16.6 ms | ~38 | ~52 MB | ~5.1 MB | Initial realistic Knight & courtyard assets |
 | 2026-08-22 | Master Visual Rebuild (Gate 1: Hero Knight + PBR Combat Zone) | 60 | 56 | ~16.6 ms | ~165 | ~880 MB | ~648 MB | 2K ambientCG PBR textures, Poly Haven photogrammetry weapons/props, ACES calibrated lighting, 8 in-engine benchmark screenshots |
+| 2026-08-22 | Gate 2: 100m Arena + Premium Combat Rebuild + 5P Scaling | 60 | 58 | ~5.2 - 17.2 ms | 48 - 141 | ~789 MB | ~908 MB | Gate 2A (28 biomechanical combat anims, swept blade, parry/dodge/combo buffering) + Gate 2B (100m x 100m 5-zone Ruined Fortress) + Gate 2C (2P-5P sustained 60 FPS) |

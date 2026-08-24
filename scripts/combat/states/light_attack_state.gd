@@ -1,14 +1,16 @@
 class_name LightAttackState
 extends State
 
-## LightAttackState — Executes a fast sword strike with forward momentum and timed hitbox window.
+## LightAttackState — 3-hit combo chain system with swept blade hit detection, forward momentum, and combo buffering.
 
 var _timer: float = 0.0
 var _hitbox_activated: bool = false
+var _wants_combo_followup: bool = false
 
 func enter(_msg: Dictionary = {}) -> void:
 	_timer = 0.0
 	_hitbox_activated = false
+	_wants_combo_followup = false
 
 	if character:
 		# Free stamina if riposting from parry
@@ -18,10 +20,15 @@ func enter(_msg: Dictionary = {}) -> void:
 			character.stamina_component.consume(character.character_data.attack_stamina_cost)
 			character.stamina_component.can_regenerate = false
 
-		# Small forward impulse on attack
+		# Biomechanical forward step impulse
 		var facing_dir: Vector3 = -character.visual_pivot.global_transform.basis.z.normalized()
-		character.velocity.x = facing_dir.x * character.character_data.attack_forward_impulse
-		character.velocity.z = facing_dir.z * character.character_data.attack_forward_impulse
+		var impulse_mult: float = 1.0
+		if character.combo_step == 2:
+			impulse_mult = 1.25 # Stepping forward cut
+		elif character.combo_step == 3:
+			impulse_mult = 1.6 # Deep forward lunge
+		character.velocity.x = facing_dir.x * character.character_data.attack_forward_impulse * impulse_mult
+		character.velocity.z = facing_dir.z * character.character_data.attack_forward_impulse * impulse_mult
 
 		character.current_attack_type = PlayerController.AttackType.LIGHT
 		character.play_attack_animation()
@@ -42,6 +49,11 @@ func physics_process_state(delta: float) -> void:
 
 	_timer += delta
 
+	# Check for combo input buffering
+	if _timer >= (character.character_data.attack_duration * 0.45):
+		if character.wants_attack() and character.has_stamina_for_attack():
+			_wants_combo_followup = true
+
 	# Hitbox active window
 	var start_t: float = character.character_data.attack_hitbox_start
 	var end_t: float = character.character_data.attack_hitbox_end
@@ -56,11 +68,17 @@ func physics_process_state(delta: float) -> void:
 
 	# Movement physics during attack
 	character.apply_gravity(delta)
-	character.apply_deceleration(delta, 6.0)
+	character.apply_deceleration(delta, 5.0)
 	character.move_and_slide()
+
+	# Chained combo transition
+	if _wants_combo_followup and _timer >= (character.character_data.attack_duration * 0.80):
+		transition_to("LightAttackState")
+		return
 
 	# Attack completion
 	if _timer >= character.character_data.attack_duration:
+		character.combo_step = 1 # Reset combo chain
 		var move_input: Vector2 = character.get_movement_input()
 		if move_input.length_squared() > 0.01:
 			transition_to("MovementState")

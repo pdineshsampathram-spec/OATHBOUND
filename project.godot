@@ -16,6 +16,7 @@ run/max_fps=60
 
 PerformanceOverlay="*res://scenes/debug/performance_overlay.tscn"
 NetworkManager="*res://scripts/networking/network_manager.gd"
+CombatTimeController="*res://scripts/combat/combat_time_controller.gd"
 
 [display]
 

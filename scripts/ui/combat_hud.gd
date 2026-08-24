@@ -40,6 +40,17 @@ func _process(delta: float) -> void:
 		if _toast_timer <= 0.0:
 			toast_label.text = ""
 
+	_update_debug_overlay()
+
+func show_announcement(msg: String, duration: float = 2.0) -> void:
+	if status_banner:
+		status_banner.text = msg
+		status_banner.modulate = Color(1.0, 0.85, 0.3, 1.0)
+		var tween: Tween = create_tween()
+		tween.tween_interval(duration * 0.7)
+		tween.tween_property(status_banner, "modulate:a", 0.0, duration * 0.3)
+		tween.tween_callback(func(): status_banner.text = "")
+
 	if not target_player:
 		return
 
@@ -195,3 +206,58 @@ func _on_state_changed(_prev: String, curr: String) -> void:
 		show_combat_toast("POISE BROKEN!", Color(1.0, 0.4, 0.2))
 	elif curr == "KnockedDownState":
 		show_combat_toast("KNOCKDOWN!", Color(1.0, 0.2, 0.2))
+
+# --- F3 Diagnostic Debug Overlay ---
+var _debug_overlay_label: Label = null
+var _show_debug: bool = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
+		_show_debug = not _show_debug
+		if _debug_overlay_label:
+			_debug_overlay_label.visible = _show_debug
+
+func _update_debug_overlay() -> void:
+	if not _show_debug:
+		if _debug_overlay_label:
+			_debug_overlay_label.visible = false
+		return
+
+	if not _debug_overlay_label:
+		_debug_overlay_label = Label.new()
+		_debug_overlay_label.name = "F3DebugOverlay"
+		_debug_overlay_label.position = Vector2(20, 200)
+		_debug_overlay_label.add_theme_font_size_override("font_size", 13)
+		_debug_overlay_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3, 1.0))
+		add_child(_debug_overlay_label)
+
+	_debug_overlay_label.visible = true
+
+	var p_state: String = target_player.state_machine.get_current_state_name() if (target_player and target_player.state_machine) else "None"
+	var in_locked: bool = target_player.player_input_locked if target_player else false
+	var mov_locked: bool = target_player.movement_locked if target_player else false
+	var atk_locked: bool = target_player.attack_locked if target_player else false
+	var ab_locked: bool = target_player.ability_locked if target_player else false
+	var ddg_locked: bool = target_player.dodge_locked if target_player else false
+	
+	var ap = target_player._get_anim_player() if target_player else null
+	var anim_name = ap.current_animation if ap else "None"
+	var anim_speed = ap.speed_scale if ap else 1.0
+
+	var ctc = get_node_or_null("/root/CombatTimeController")
+	var ctc_info = ctc.get_debug_info() if (ctc and ctc.has_method("get_debug_info")) else {}
+
+	_debug_overlay_label.text = """[F3 COMBAT DIAGNOSTICS]
+Player State: %s
+Input Locked: %s | Move Locked: %s | Attack Locked: %s
+Ability Locked: %s | Dodge Locked: %s
+Anim: %s (Speed: %.2fx)
+Time Scale: %.3f (State: %s)
+Hitstop Active: %s | Slowmo Active: %s
+""" % [
+		p_state, str(in_locked), str(mov_locked), str(atk_locked),
+		str(ab_locked), str(ddg_locked),
+		anim_name, anim_speed,
+		Engine.time_scale, ctc_info.get("state", "NORMAL"),
+		str(ctc_info.get("hitstop_active", false)), str(ctc_info.get("slowmo_active", false))
+	]

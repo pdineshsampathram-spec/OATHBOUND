@@ -13,6 +13,12 @@ static var _stream_parry: AudioStreamWAV = null
 static var _stream_block: AudioStreamWAV = null
 static var _stream_dodge: AudioStreamWAV = null
 static var _stream_death: AudioStreamWAV = null
+static var _stream_ult_activation: AudioStreamWAV = null
+static var _stream_ult_buildup: AudioStreamWAV = null
+static var _stream_ult_sword_rise: AudioStreamWAV = null
+static var _stream_ult_climax: AudioStreamWAV = null
+static var _stream_ult_dissolution: AudioStreamWAV = null
+static var _stream_ult_victory: AudioStreamWAV = null
 
 @onready var sfx_player: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
 
@@ -38,6 +44,18 @@ static func _ensure_streams() -> void:
 		_stream_dodge = SFXGen.generate_dodge_whoosh()
 	if not _stream_death:
 		_stream_death = SFXGen.generate_death_collapse()
+	if not _stream_ult_activation:
+		_stream_ult_activation = SFXGen.generate_ultimate_activation()
+	if not _stream_ult_buildup:
+		_stream_ult_buildup = SFXGen.generate_ultimate_buildup()
+	if not _stream_ult_sword_rise:
+		_stream_ult_sword_rise = SFXGen.generate_ultimate_sword_rise()
+	if not _stream_ult_climax:
+		_stream_ult_climax = SFXGen.generate_ultimate_climax()
+	if not _stream_ult_dissolution:
+		_stream_ult_dissolution = SFXGen.generate_ultimate_dissolution()
+	if not _stream_ult_victory:
+		_stream_ult_victory = SFXGen.generate_ultimate_victory()
 
 func play_sword_swing() -> void:
 	_play_stream(_stream_swing, 0.95 + randf() * 0.1)
@@ -48,6 +66,15 @@ func play_weapon_impact(is_heavy: bool = false) -> void:
 
 func play_block() -> void:
 	_play_stream(_stream_block, 0.95 + randf() * 0.1)
+
+func play_shield_block() -> void:
+	play_block()
+
+func play_flesh_hit() -> void:
+	play_weapon_impact(false)
+
+func play_armor_hit() -> void:
+	play_weapon_impact(true)
 
 func play_parry() -> void:
 	_play_stream(_stream_parry, 1.0 + (randf() * 0.1 - 0.05))
@@ -60,6 +87,24 @@ func play_death() -> void:
 
 func play_ability_cast(_ability_name: String) -> void:
 	_play_stream(_stream_impact_heavy, 1.2)
+
+func play_ultimate_activation() -> void:
+	_play_stream(_stream_ult_activation, 1.0)
+
+func play_ultimate_buildup() -> void:
+	_play_stream(_stream_ult_buildup, 1.0)
+
+func play_ultimate_sword_rise() -> void:
+	_play_stream(_stream_ult_sword_rise, 1.0)
+
+func play_ultimate_climax() -> void:
+	_play_stream(_stream_ult_climax, 1.0)
+
+func play_ultimate_dissolution() -> void:
+	_play_stream(_stream_ult_dissolution, 1.0)
+
+func play_ultimate_victory() -> void:
+	_play_stream(_stream_ult_victory, 1.0)
 
 func _play_stream(stream: AudioStream, pitch_scale: float = 1.0) -> void:
 	if not stream: return

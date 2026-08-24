@@ -1,0 +1,81 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://scenes/test/test_dummy.tscn" id="2_dummy"]
+[ext_resource type="Material" path="res://assets/materials/mat_flagstone_floor.tres" id="3_floor_mat"]
+[ext_resource type="Material" path="res://assets/materials/mat_fortress_sandstone.tres" id="4_wall_mat"]
+[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_hud"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_test"]
+sky_top_color = Color(0.24, 0.38, 0.58, 1)
+sky_horizon_color = Color(0.68, 0.60, 0.48, 1)
+ground_bottom_color = Color(0.12, 0.11, 0.10, 1)
+ground_horizon_color = Color(0.42, 0.38, 0.32, 1)
+
+[sub_resource type="Sky" id="Sky_test"]
+sky_material = SubResource("ProceduralSkyMaterial_test")
+
+[sub_resource type="Environment" id="Environment_test"]
+background_mode = 2
+sky = SubResource("Sky_test")
+ambient_light_source = 3
+ambient_light_color = Color(0.65, 0.62, 0.58, 1)
+ambient_light_energy = 1.25
+tonemap_mode = 3
+tonemap_exposure = 1.20
+tonemap_white = 4.5
+ssao_enabled = true
+ssao_radius = 1.4
+ssao_intensity = 1.8
+glow_enabled = true
+glow_intensity = 0.3
+glow_bloom = 0.05
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+material = ExtResource("3_floor_mat")
+size = Vector3(20, 0.4, 20)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(20, 0.4, 20)
+
+[node name="CombatQualityTestScene" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_test")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 15, 0)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 1.15
+shadow_enabled = true
+shadow_bias = 0.02
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.707107, 0.5, -0.5, 0, 0.707107, 0.707107, 0.707107, 0.5, -0.5, 0, 15, 0)
+light_color = Color(0.65, 0.75, 0.90, 1)
+light_energy = 0.45
+shadow_enabled = false
+
+[node name="VoxelGI" type="ReflectionProbe" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+size = Vector3(25, 10, 25)
+enable_shadows = true
+
+[node name="TestArenaFloor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TestArenaFloor"]
+mesh = SubResource("BoxMesh_floor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TestArenaFloor"]
+shape = SubResource("BoxShape3D_floor")
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="HeroPlayer" parent="Players" instance=ExtResource("1_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.2)
+
+[node name="CombatTrainingPell" parent="." instance=ExtResource("2_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.8)
+
+[node name="CombatHUD" parent="." instance=ExtResource("5_hud")]

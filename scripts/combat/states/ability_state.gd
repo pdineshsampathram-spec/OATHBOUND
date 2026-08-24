@@ -1,6 +1,9 @@
 class_name AbilityState
 extends State
 
+const PowerVFXSystem = preload("res://scripts/vfx/power_vfx_system.gd")
+const UltimateVFXController = preload("res://scripts/vfx/ultimate_vfx_controller.gd")
+
 ## AbilityState — Server-authoritative execution of all 12 supernatural ability behaviors.
 ## Handles cast timing, hitbox sweeps, projectile firing, pulse chains, teleports, and buffs.
 
@@ -62,7 +65,11 @@ func enter(msg: Dictionary = {}) -> void:
 			_fire_axe_projectile()
 
 		AbilityData.ExecutionType.DIRECT_STRIKE:
-			character.play_heavy_attack_animation()
+			if _ability.category == AbilityData.Category.ULTIMATE:
+				_cast_duration = 4.8
+				UltimateVFXController.launch_ascendance(character, [])
+			else:
+				character.play_heavy_attack_animation()
 
 		AbilityData.ExecutionType.MULTI_HIT_COMBO:
 			character.play_attack_animation()

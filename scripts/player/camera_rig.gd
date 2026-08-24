@@ -1,25 +1,34 @@
 class_name CameraRig
 extends Node3D
 
-## CameraRig — Third-person orbit camera with SpringArm3D collision and mouse look.
-## Automatically disables itself when instantiated on remote multiplayer peers.
+## CameraRig — Cinematic Third-Person Combat Camera with Trauma Shake, Dynamic FOV, and Adaptive Combat Framing.
 
 @export var mouse_sensitivity: float = 0.003
 @export var min_pitch: float = deg_to_rad(-70.0)
 @export var max_pitch: float = deg_to_rad(60.0)
 @export var default_distance: float = 4.0
+@export var combat_distance: float = 3.2
 @export var target_offset: Vector3 = Vector3(0.0, 1.4, 0.0)
 
 @onready var spring_arm: SpringArm3D = $SpringArm3D
 @onready var camera: Camera3D = $SpringArm3D/Camera3D
 
-var _pitch: float = -0.15 # Slight downward angle initially
+var _pitch: float = -0.15
 var _yaw: float = 0.0
 var is_mouse_captured: bool = false
 var is_active_local: bool = true
 
+# Cinematic Polish & Trauma
+var _trauma: float = 0.0
+var _trauma_decay: float = 3.5
+var _target_distance: float = 4.0
+var _current_distance: float = 4.0
+var _punch_offset: Vector3 = Vector3.ZERO
+
 func _ready() -> void:
-	top_level = true # Keep camera rig world-oriented so player rotations don't spin camera
+	top_level = true
+	_target_distance = default_distance
+	_current_distance = default_distance
 
 	if spring_arm:
 		spring_arm.spring_length = default_distance
@@ -53,18 +62,47 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch -= event.relative.y * mouse_sensitivity
 		_pitch = clampf(_pitch, min_pitch, max_pitch)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_active_local:
 		return
 
 	var target_node: Node3D = get_parent() as Node3D
 	if target_node:
-		global_position = target_node.global_position + target_offset
+		# Check if parent is in combat stance to adapt distance
+		var p_ctrl: PlayerController = target_node as PlayerController
+		if p_ctrl and p_ctrl.is_combat_stance:
+			_target_distance = combat_distance
+		else:
+			_target_distance = default_distance
 
-	# Update yaw on base rig, pitch on spring arm
+		_current_distance = lerp(_current_distance, _target_distance, 6.0 * delta)
+		if spring_arm:
+			spring_arm.spring_length = _current_distance
+
+		# Smooth trauma & punch decay
+		if _trauma > 0.0:
+			_trauma = max(0.0, _trauma - _trauma_decay * delta)
+			var shake: float = _trauma * _trauma * 0.08
+			_punch_offset = Vector3(
+				randf_range(-shake, shake),
+				randf_range(-shake, shake),
+				randf_range(-shake, shake)
+			)
+		else:
+			_punch_offset = _punch_offset.lerp(Vector3.ZERO, 12.0 * delta)
+
+		global_position = target_node.global_position + target_offset + _punch_offset
+
+	# Update yaw & pitch
 	rotation.y = _yaw
 	if spring_arm:
 		spring_arm.rotation.x = _pitch
+
+func apply_trauma(amount: float) -> void:
+	_trauma = clampf(_trauma + amount, 0.0, 1.0)
+
+func trigger_impact_punch(intensity: float = 0.05) -> void:
+	apply_trauma(intensity * 3.0)
 
 func _capture_mouse() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)

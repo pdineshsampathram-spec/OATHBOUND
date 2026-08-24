@@ -3,6 +3,7 @@ extends Camera3D
 
 ## CombatCamera — Handles third-person combat framing with dynamic trauma-based screen shake,
 ## parry deflection jolts, finisher camera orbits, and death pullbacks.
+## NOTE: No longer manipulates Engine.time_scale directly — delegates to CombatTimeController.
 
 @export var target: Node3D = null
 @export var follow_speed: float = 12.0
@@ -52,17 +53,22 @@ func trigger_parry_jolt() -> void:
 func trigger_finisher_cam(duration: float = 1.2) -> void:
 	_is_finisher_mode = true
 	_finisher_timer = duration
-	Engine.time_scale = 0.4 # Cinematic slow-motion
+	# Delegate slow-motion to CombatTimeController — no direct Engine.time_scale mutation
+	var ctc: Node = get_node_or_null("/root/CombatTimeController")
+	if ctc and ctc.has_method("trigger_slowmo"):
+		ctc.trigger_slowmo(0.4, duration, "finisher")
 
 func _process_finisher_cam(delta: float) -> void:
-	_finisher_timer -= delta / Engine.time_scale
+	# Use unscaled delta for consistent orbit timing regardless of time_scale
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	_finisher_timer -= real_delta
 	if _finisher_timer <= 0.0:
 		_is_finisher_mode = false
-		Engine.time_scale = 1.0
+		# CombatTimeController handles time restore via its own timer
 		return
 
 	if target and is_instance_valid(target):
-		_orbit_angle += 1.5 * delta
+		_orbit_angle += 1.5 * real_delta
 		var offset: Vector3 = Vector3(sin(_orbit_angle), 0.4, cos(_orbit_angle)) * 2.5
 		global_position = target.global_position + Vector3(0, 1.4, 0) + offset
 		look_at(target.global_position + Vector3(0, 1.2, 0), Vector3.UP)
@@ -75,3 +81,4 @@ func _apply_shake(delta: float) -> void:
 	var offset_z: float = sin(_noise_y * 0.9) * 0.04 * shake_power
 	h_offset = offset_x
 	v_offset = offset_y
+

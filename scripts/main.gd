@@ -22,20 +22,28 @@ func _ready() -> void:
 	if match_manager and combat_hud:
 		combat_hud.connect_match_manager(match_manager)
 
-	if NetworkManager.is_server():
+	var is_srv: bool = true
+	var nm = get_node_or_null("/root/NetworkManager")
+	if nm:
+		is_srv = nm.is_server()
+
+	if is_srv:
 		_spawn_all_connected_players()
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 	_find_and_connect_local_player()
 
 func _spawn_all_connected_players() -> void:
-	var player_ids: Array = NetworkManager.players.keys()
+	var player_ids: Array = []
+	var nm = get_node_or_null("/root/NetworkManager")
+	if nm:
+		player_ids = nm.players.keys()
 	if player_ids.is_empty():
 		player_ids = [1]
 
 	for i in range(player_ids.size()):
 		var p_id: int = player_ids[i]
-		var p_data: Dictionary = NetworkManager.players.get(p_id, {})
+		var p_data: Dictionary = nm.players.get(p_id, {}) if nm else {}
 		var c_class: String = p_data.get("character", "Knight")
 		_spawn_player_at_index(p_id, i, c_class)
 

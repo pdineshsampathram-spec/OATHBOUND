@@ -1,0 +1,43 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/solo_arena.gd" id="1_arena"]
+[ext_resource type="PackedScene" path="res://scenes/arena/ruined_fortress_100m.tscn" id="2_fortress"]
+[ext_resource type="Script" path="res://scripts/combat/wave_manager.gd" id="3_wave"]
+[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="5_player"]
+
+[node name="SoloArena" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="RuinedFortress100m" parent="." instance=ExtResource("2_fortress")]
+
+[node name="PlayerSpawnPoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 4)
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="WaveManager" type="Node" parent="."]
+script = ExtResource("3_wave")
+player_scene = ExtResource("5_player")
+max_simultaneous_enemies = 3
+
+[node name="Enemies" type="Node3D" parent="WaveManager"]
+
+[node name="EnemySpawnPoints" type="Node3D" parent="WaveManager"]
+
+[node name="Spawn1" type="Marker3D" parent="WaveManager/EnemySpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -8)
+
+[node name="Spawn2" type="Marker3D" parent="WaveManager/EnemySpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.5, 0)
+
+[node name="Spawn3" type="Marker3D" parent="WaveManager/EnemySpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.5, 0)
+
+[node name="Spawn4" type="Marker3D" parent="WaveManager/EnemySpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.5, -6)
+
+[node name="Spawn5" type="Marker3D" parent="WaveManager/EnemySpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.5, -6)
+
+[node name="CombatHUD" parent="." instance=ExtResource("4_hud")]

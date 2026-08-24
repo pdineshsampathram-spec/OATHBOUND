@@ -4,8 +4,10 @@ extends State
 ## SprintState — High-speed locomotion that drains stamina per second.
 
 func enter(_msg: Dictionary = {}) -> void:
-	if character and character.stamina_component:
-		character.stamina_component.can_regenerate = false
+	if character:
+		character._play_skeletal_animation("sprint", 0.12)
+		if character.stamina_component:
+			character.stamina_component.can_regenerate = false
 
 func exit() -> void:
 	if character and character.stamina_component:

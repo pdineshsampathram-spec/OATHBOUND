@@ -4,8 +4,13 @@ extends State
 ## IdleState — Grounded, stationary state where stamina, poise, and supernatural energy regenerate.
 
 func enter(_msg: Dictionary = {}) -> void:
-	if character and character.stamina_component:
-		character.stamina_component.can_regenerate = true
+	if character:
+		if character.stamina_component:
+			character.stamina_component.can_regenerate = true
+		if character.is_combat_stance:
+			character._play_skeletal_animation("combat_idle", 0.15)
+		else:
+			character._play_skeletal_animation("idle", 0.15)
 
 func physics_process_state(delta: float) -> void:
 	if not character:

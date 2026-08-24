@@ -43,11 +43,10 @@ static func spawn_hit_sparks(parent: Node, global_pos: Vector3, is_heavy: bool =
 		timer.timeout.connect(particles.queue_free)
 
 static func spawn_parry_flash(parent: Node, global_pos: Vector3) -> void:
-	if not parent: return
+	if not parent or not parent.is_inside_tree(): return
 
 	var particles: GPUParticles3D = GPUParticles3D.new()
 	particles.top_level = true
-	particles.global_position = global_pos
 	particles.amount = 25
 	particles.lifetime = 0.15
 	particles.one_shot = true
@@ -73,17 +72,17 @@ static func spawn_parry_flash(parent: Node, global_pos: Vector3) -> void:
 	particles.draw_pass_1 = draw_mesh
 
 	parent.add_child(particles)
+	particles.global_position = global_pos
 	particles.emitting = true
 
 	var timer: SceneTreeTimer = parent.get_tree().create_timer(0.25)
 	timer.timeout.connect(particles.queue_free)
 
 static func spawn_dodge_dust(parent: Node, global_pos: Vector3) -> void:
-	if not parent: return
+	if not parent or not parent.is_inside_tree(): return
 
 	var particles: GPUParticles3D = GPUParticles3D.new()
 	particles.top_level = true
-	particles.global_position = global_pos
 	particles.amount = 8
 	particles.lifetime = 0.35
 	particles.one_shot = true
@@ -91,27 +90,26 @@ static func spawn_dodge_dust(parent: Node, global_pos: Vector3) -> void:
 
 	var pmat: ParticleProcessMaterial = ParticleProcessMaterial.new()
 	pmat.direction = Vector3(0, 1, 0)
-	pmat.spread = 60.0
-	pmat.initial_velocity_min = 1.5
-	pmat.initial_velocity_max = 3.0
-	pmat.gravity = Vector3(0, -1.5, 0)
-	pmat.scale_min = 0.1
-	pmat.scale_max = 0.25
-	pmat.color = Color(0.55, 0.52, 0.48, 0.4) # Dust gray/brown
+	pmat.spread = 120.0
+	pmat.initial_velocity_min = 1.0
+	pmat.initial_velocity_max = 2.5
+	pmat.gravity = Vector3(0, -1.0, 0)
+	pmat.scale_min = 0.08
+	pmat.scale_max = 0.2
+	pmat.color = Color(0.55, 0.48, 0.38, 0.6)
 	particles.process_material = pmat
 
-	var draw_mesh: SphereMesh = SphereMesh.new()
-	draw_mesh.radius = 0.12
-	draw_mesh.height = 0.24
+	var draw_mesh: BoxMesh = BoxMesh.new()
+	draw_mesh.size = Vector3(0.06, 0.06, 0.06)
 	var dmat: StandardMaterial3D = StandardMaterial3D.new()
-	dmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dmat.albedo_color = Color(0.55, 0.52, 0.48, 0.4)
-	dmat.roughness = 1.0
+	dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dmat.albedo_color = Color(0.6, 0.52, 0.42, 0.7)
 	draw_mesh.material = dmat
 	particles.draw_pass_1 = draw_mesh
 
 	parent.add_child(particles)
+	particles.global_position = global_pos
 	particles.emitting = true
 
-	var timer: SceneTreeTimer = parent.get_tree().create_timer(0.45)
+	var timer: SceneTreeTimer = parent.get_tree().create_timer(0.4)
 	timer.timeout.connect(particles.queue_free)

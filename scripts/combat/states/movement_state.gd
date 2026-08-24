@@ -3,9 +3,29 @@ extends State
 
 ## MovementState — Standard ground locomotion handling WASD inputs and combat transitions.
 
+var _current_anim: String = ""
+
 func enter(_msg: Dictionary = {}) -> void:
-	if character and character.stamina_component:
-		character.stamina_component.can_regenerate = true
+	if character:
+		if character.stamina_component:
+			character.stamina_component.can_regenerate = true
+		_update_movement_animation(Vector2.UP)
+
+func _update_movement_animation(move_input: Vector2) -> void:
+	if not character:
+		return
+	var target_anim: String = "walk"
+	if character.is_combat_stance:
+		if absf(move_input.x) > absf(move_input.y):
+			target_anim = "combat_strafe_r" if move_input.x > 0 else "combat_strafe_l"
+		else:
+			target_anim = "combat_walk_bwd" if move_input.y > 0 else "combat_walk_fwd"
+	else:
+		target_anim = "walk"
+	
+	if target_anim != _current_anim:
+		_current_anim = target_anim
+		character._play_skeletal_animation(target_anim, 0.15)
 
 func physics_process_state(delta: float) -> void:
 	if not character:
@@ -62,11 +82,12 @@ func physics_process_state(delta: float) -> void:
 		transition_to("SprintState")
 		return
 
-	# Movement physics
 	var move_input: Vector2 = character.get_movement_input()
 	if move_input.length_squared() < 0.01:
 		transition_to("IdleState")
 		return
+
+	_update_movement_animation(move_input)
 
 	var move_dir: Vector3 = character.get_camera_relative_direction(move_input)
 	character.apply_gravity(delta)
