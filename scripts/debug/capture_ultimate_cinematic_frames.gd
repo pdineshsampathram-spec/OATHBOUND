@@ -23,20 +23,28 @@ var output_dir: String = "/Users/ramteja/.gemini/antigravity-ide/brain/db078232-
 var docs_dir: String = "/Users/ramteja/Documents/Blender exp game/docs/screenshots"
 
 var capture_schedule: Array[Dictionary] = [
-	{ "time": 2.0, "name": "01_hilt_macro_awakening.png", "desc": "Hand/Hilt Macro & Awakening" },
+	{ "time": 2.0, "name": "01_hilt_macro_awakening.png", "desc": "Hand/Hilt Macro & Body Seam Energy" },
 	{ "time": 4.0, "name": "02_helmet_visor_reveal.png", "desc": "Helmet & Visor Front Reveal" },
 	{ "time": 6.5, "name": "03_hero_upward_filaments.png", "desc": "Hero Upward Angle & Rising Filaments" },
-	{ "time": 10.0, "name": "04_sweeping_orbit_power_rise.png", "desc": "180° Sweeping Orbit & Power Rise" },
-	{ "time": 14.5, "name": "05_player_to_sky_energy_ascension.png", "desc": "Knight -> Sword -> Player-To-Sky Energy Ascension" },
-	{ "time": 18.5, "name": "06_sword_zenith_celestial_stream.png", "desc": "Vertical Celestial Energy Column & Arcs" },
-	{ "time": 21.5, "name": "07_aerial_fortress_panorama.png", "desc": "High Aerial 100m Fortress & Sky Vortex" },
-	{ "time": 24.5, "name": "08_enemy_terror_stasis.png", "desc": "Enemy Terror Front Close-Up in Stasis" },
-	{ "time": 30.0, "name": "09_enemy_vaporization_suction.png", "desc": "Dedicated Enemy Vaporization & Inward Suction" },
-	{ "time": 34.2, "name": "10_3d_cataclysm_release_ground_air_sky.png", "desc": "3D Cataclysm Release: Ground + Atmosphere + Sky" },
-	{ "time": 37.5, "name": "11_100m_shockwave_sky_eruption.png", "desc": "100m Shockwave & Sky Eruption" },
-	{ "time": 41.0, "name": "12_aftermath_lingering_embers.png", "desc": "Aftermath & Lingering Celestial Aura" },
-	{ "time": 45.5, "name": "13_victory_title_triumph.png", "desc": "Hero Victory Push-In & Player Wins Title" }
+	{ "time": 10.0, "name": "04_sweeping_orbit_power_rise.png", "desc": "180° Sweeping Orbit & Ground Cracks" },
+	{ "time": 13.5, "name": "05_sky_phase1_transformation.png", "desc": "Sky Transformation: Sunlight Dims & Clouds Rotate" },
+	{ "time": 16.5, "name": "06_sword_raised_conductor.png", "desc": "Sword Raised & Blade Energy Conductor" },
+	{ "time": 20.0, "name": "07_dedicated_sky_reveal.png", "desc": "Dedicated Sky Reveal: Knight -> 50m Column -> Vortex" },
+	{ "time": 23.5, "name": "08_dense_celestial_submission.png", "desc": "Dense Celestial Submission: Lightning & Orbital Arcs" },
+	{ "time": 26.5, "name": "09_world_submission_wide_shot.png", "desc": "Pre-Release World Submission: 100m Fortress Total Dominion" },
+	{ "time": 29.0, "name": "10_enemy_terror_stasis.png", "desc": "Enemy Terror Front Close-Up in Stasis" },
+	{ "time": 32.5, "name": "11_silence_before_catastrophe.png", "desc": "Inward Compression & Breathless Silence Before Catastrophe" },
+	{ "time": 34.2, "name": "12_3d_cataclysm_detonation.png", "desc": "3D World-Scale Detonation: Ground + Air + Sky" },
+	{ "time": 36.2, "name": "13_shockwave_hits_enemies_recoil.png", "desc": "Shockwave Hits Enemies: Recoil & Raw Armor Illumination" },
+	{ "time": 39.0, "name": "14_dedicated_enemy_vaporization.png", "desc": "Dedicated Post-Release Vaporization: Fracturing Dissolution" },
+	{ "time": 41.8, "name": "15_vapor_suction_knight_aura.png", "desc": "Enemy Vapor Suction into Knight Aura" },
+	{ "time": 43.2, "name": "16_secondary_aftershock_pulse.png", "desc": "Secondary Aftershock Pulse Through Arena" },
+	{ "time": 45.0, "name": "17_scarred_sky_aftermath.png", "desc": "Scarred Sky Aftermath & Slowly Rotating Vortex" },
+	{ "time": 47.0, "name": "18_knight_aftermath_clean_rim_light.png", "desc": "Knight Aftermath: Sword Lowered & Clean Rim Lighting" },
+	{ "time": 51.5, "name": "19_cataclysm_mythic_title.png", "desc": "Dedicated Mythic Title: CATACLYSM OF THE SEVENTH OATH" },
+	{ "time": 53.5, "name": "20_player_wins_triumph.png", "desc": "Sequential PLAYER WINS Triumph Beat" }
 ]
+
 
 
 var current_capture_idx: int = 0
@@ -93,17 +101,22 @@ func _launch_ultimate() -> void:
 var is_capturing: bool = false
 
 func _process(delta: float) -> bool:
-	elapsed += delta
+	var cur_seq_time: float = elapsed
+	if director and is_instance_valid(director):
+		cur_seq_time = director._sequence_time
+	else:
+		elapsed += delta
+		cur_seq_time = elapsed
 
 	if not is_capturing and current_capture_idx < capture_schedule.size():
 		var target_shot: Dictionary = capture_schedule[current_capture_idx]
-		if elapsed >= target_shot["time"]:
+		if cur_seq_time >= target_shot["time"]:
 			is_capturing = true
-			_do_capture(target_shot)
+			_do_capture(target_shot, cur_seq_time)
 
 	return false
 
-func _do_capture(target_shot: Dictionary) -> void:
+func _do_capture(target_shot: Dictionary, shot_time: float) -> void:
 	await RenderingServer.frame_post_draw
 	var filepath = output_dir + "/" + target_shot["name"]
 	var docs_filepath = docs_dir + "/" + target_shot["name"]
@@ -117,7 +130,7 @@ func _do_capture(target_shot: Dictionary) -> void:
 			current_capture_idx + 1,
 			capture_schedule.size(),
 			target_shot["desc"],
-			elapsed,
+			shot_time,
 			cam.name if cam else "NULL",
 			cam.global_position if cam else Vector3.ZERO,
 			filepath
@@ -126,8 +139,10 @@ func _do_capture(target_shot: Dictionary) -> void:
 	is_capturing = false
 
 
+
 func _finish_captures() -> void:
 	print("\n=================================================================")
-	print("=== ALL 12 CINEMATIC PROOF FRAMES CAPTURED TO ARTIFACTS ===")
+	print("=== ALL 20 CINEMATIC PROOF FRAMES CAPTURED TO ARTIFACTS ===")
 	print("=================================================================\n")
 	quit()
+

@@ -15,6 +15,8 @@ uniform float storm_intensity : hint_range(0.0, 3.0) = 1.0;
 uniform float lightning_intensity : hint_range(0.0, 3.0) = 0.0;
 uniform float cloud_density : hint_range(0.1, 3.0) = 1.0;
 uniform float horizon_fade_height : hint_range(-20.0, 20.0) = 1.5;
+uniform float central_suction_warp : hint_range(0.0, 2.0) = 0.0;
+uniform float atmospheric_deformation : hint_range(0.0, 2.0) = 0.0;
 
 varying vec3 v_world_pos;
 
@@ -53,21 +55,23 @@ float lightning_filament(vec2 uv, float speed) {
 }
 
 void fragment() {
-	// Polar vortex coordinates with distance warping
+	// Polar vortex coordinates with distance warping and central suction pull
 	float dist_from_center = length(v_world_pos.xz);
 	float angle = atan(v_world_pos.x, v_world_pos.z);
 	
-	// Spiral arm rotation (faster near eye of storm)
-	float arm_twist = dist_from_center * 0.04;
-	vec2 polar_uv = vec2(angle / 6.28318 + 0.5 + arm_twist, dist_from_center * 0.018);
+	// Physical atmospheric pull: Clouds and haze stretch inward toward central energy column
+	float inward_stretch = 1.0 + (central_suction_warp * (40.0 / (dist_from_center + 4.0)));
+	float arm_twist = (dist_from_center * 0.04) + (central_suction_warp * 1.5);
+	
+	vec2 polar_uv = vec2(angle / 6.28318 + 0.5 + arm_twist, (dist_from_center / inward_stretch) * 0.018);
 	polar_uv.x += TIME * vortex_speed;
 	polar_uv.y += TIME * vortex_speed * 0.25;
 	
-	// Dual-octave domain warping for dense cloud turbulence
+	// Dual-octave domain warping for dense cloud turbulence and atmospheric deformation
 	vec2 warp1 = vec2(fbm(polar_uv * 3.0), fbm(polar_uv * 3.0 + vec2(5.2, 1.3)));
-	vec2 warp2 = vec2(fbm(polar_uv * 6.0 + warp1 * 1.5), fbm(polar_uv * 6.0 - warp1 * 1.5));
+	vec2 warp2 = vec2(fbm(polar_uv * 6.0 + warp1 * (1.5 + atmospheric_deformation)), fbm(polar_uv * 6.0 - warp1 * (1.5 + atmospheric_deformation)));
 	
-	float clouds1 = fbm((polar_uv + warp2 * 0.4) * 4.0);
+	float clouds1 = fbm((polar_uv + warp2 * (0.4 + atmospheric_deformation * 0.3)) * 4.0);
 	float clouds2 = fbm((polar_uv * 8.0 - vec2(TIME * vortex_speed * 0.6)) + warp1 * 0.3);
 	float vortex_pattern = clamp((clouds1 * 0.65 + clouds2 * 0.45) * storm_intensity * cloud_density, 0.0, 1.5);
 	
@@ -79,7 +83,7 @@ void fragment() {
 		lightning = (l1 + l2 * 0.7) * lightning_intensity;
 	}
 	
-	// Multi-tier color stratification
+	// Multi-tier color stratification with contrast preservation (deep blacks, indigos, crisp white-violet)
 	vec3 base_sky = mix(sky_dark_color.rgb, sky_indigo_color.rgb, clamp(v_world_pos.y * 0.025, 0.0, 1.0));
 	vec3 cloud_layer = mix(base_sky, cloud_energy_color.rgb * 1.8, pow(clamp(vortex_pattern, 0.0, 1.0), 2.2));
 	vec3 core_burst = mix(cloud_layer, core_glow_color.rgb * 3.5, pow(clamp(vortex_pattern - 0.6, 0.0, 1.0) * 1.8, 3.0));
@@ -87,10 +91,11 @@ void fragment() {
 	// Add lightning flashes
 	vec3 final_sky = core_burst + core_glow_color.rgb * lightning * 2.5;
 	
-	// Horizon fade
+	// Non-uniform horizon fade
 	float horizon_alpha = clamp((v_world_pos.y - horizon_fade_height) * 0.09, 0.0, 0.92);
 	
 	ALBEDO = final_sky;
 	ALPHA = horizon_alpha;
 }
+
 
