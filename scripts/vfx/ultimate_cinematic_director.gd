@@ -12,8 +12,10 @@ const ENERGY_RIBBON_SHADER = preload("res://assets/materials/energy_ribbon.gdsha
 const CELESTIAL_SKY_SHADER = preload("res://assets/materials/celestial_sky_vortex.gdshader")
 const DISSOLUTION_SHADER = preload("res://assets/materials/dissolution_shader.gdshader")
 const ENERGY_FLARE_SHADER = preload("res://assets/materials/energy_flare.gdshader")
+const DENSE_PLASMA_SHADER = preload("res://assets/materials/dense_plasma_column.gdshader")
+const ATMOSPHERIC_SHOCK_SHADER = preload("res://assets/materials/atmospheric_shock_distortion.gdshader")
 
-# 23 Dedicated Blender Hero Assets
+# 24 Dedicated Blender Hero Assets
 const AURA_RIBBON_PRIMARY = preload("res://assets/ultimate/blender/aura_ribbon_primary.glb")
 const AURA_RIBBON_SECONDARY = preload("res://assets/ultimate/blender/aura_ribbon_secondary.glb")
 const ENERGY_FILAMENTS = preload("res://assets/ultimate/blender/energy_filament_cluster.glb")
@@ -27,7 +29,8 @@ const SHOCKWAVE_SECONDARY_SCENE = preload("res://assets/ultimate/blender/shockwa
 const SKY_SPIRAL_SCENE = preload("res://assets/ultimate/blender/sky_energy_spiral.glb")
 const AFTERSHOCK_SCENE = preload("res://assets/ultimate/blender/aftershock_energy.glb")
 
-# New Final Touch-Up Hero Assets
+# Breakthrough Living Plasma Hero Assets
+const CATACLYSM_ENERGY_COLUMN = preload("res://assets/ultimate/blender/cataclysm_energy_column.glb")
 const PLAYER_TO_SKY_STREAM = preload("res://assets/ultimate/blender/player_to_sky_energy_stream.glb")
 const SKY_CELESTIAL_ARCS = preload("res://assets/ultimate/blender/sky_celestial_arcs.glb")
 const ATMOSPHERIC_BLAST_WAVE = preload("res://assets/ultimate/blender/atmospheric_blast_wave.glb")
@@ -52,6 +55,8 @@ var _on_complete_callback: Callable = Callable()
 var _is_active: bool = false
 var _sequence_time: float = 0.0
 var _is_released: bool = false
+var _impacted_targets: Dictionary = {}
+var _all_targets_impacted: bool = false
 
 var _temp_vfx_nodes: Array[Node] = []
 var _dissolving_materials: Array[ShaderMaterial] = []
@@ -79,6 +84,8 @@ var _ground_cracks_instance: Node3D = null
 var _propagation_front_instance: Node3D = null
 var _sky_spiral_instance: Node3D = null
 var _sky_pillar_instance: MeshInstance3D = null
+var _energy_column_instance: Node3D = null
+var _energy_column_mat: ShaderMaterial = null
 var _player_to_sky_instance: Node3D = null
 var _sky_celestial_arcs_instance: Node3D = null
 var _sky_vortex_mat: ShaderMaterial = null
@@ -210,13 +217,19 @@ func _process(delta: float) -> void:
 		_execute_god_tier_release()
 		power_level = 1.0
 
-	# At t = 35.5s: Shockwave visibly impacts enemies (breathing room, recoil, armor lights up, authoritative single damage)
-	if _sequence_time >= 35.5 and not _impact_executed:
-		_execute_release_enemy_impact()
-
-	# At t = 37.5s: Existing high-quality vaporization begins as the direct consequence of release
-	if _sequence_time >= 37.5 and not _vaporization_triggered:
-		_trigger_all_enemy_vaporization()
+	# Physical Expanding Shockwave Front Impact (Spatial Causality: distance <= shock_radius)
+	if _is_released and not _all_targets_impacted:
+		var shock_radius: float = (_sequence_time - 33.5) * 38.0 # Expands at 38 m/s
+		var unimpacted_count: int = 0
+		for target in _targets:
+			if is_instance_valid(target) and not _impacted_targets.has(target) and not target.is_dead:
+				var dist: float = _knight.global_position.distance_to(target.global_position)
+				if dist <= shock_radius or _sequence_time >= 36.0:
+					_impact_single_enemy(target)
+				else:
+					unimpacted_count += 1
+		if unimpacted_count == 0:
+			_all_targets_impacted = true
 
 	_update_power_level_world_state(real_delta)
 	_update_19_shot_cinematic_camera(real_delta)
@@ -225,8 +238,6 @@ func _process(delta: float) -> void:
 	if _sequence_time >= 54.0:
 		_finish_sequence()
 
-var _impact_executed: bool = false
-var _vaporization_triggered: bool = false
 
 ## --- DEDICATED 19-SHOT CINEMATIC CAMERA SYSTEM ---
 func _setup_dedicated_cinematic_camera() -> void:
@@ -546,19 +557,33 @@ func _update_knight_actions_and_filaments(real_delta: float) -> void:
 		_aura_filaments_s_instance.rotate_y(real_delta * lerpf(-1.2, -3.8, power_level))
 		_aura_filaments_s_instance.scale = Vector3.ONE * lerpf(1.0, 1.3, power_level)
 
-	# Player-to-Sky Ascending Energy Stream (Connects Knight directly to the heavens)
-	if is_instance_valid(_player_to_sky_instance):
-		if power_level > 0.28:
-			_player_to_sky_instance.visible = true
-			var ascension_progress = smoothstep(0.28, 0.75, power_level)
-			_player_to_sky_instance.scale = Vector3(
-				lerpf(0.4, 1.1, power_level),
-				ascension_progress,
-				lerpf(0.4, 1.1, power_level)
+	# Breakthrough Living Plasma Energy Column (Connecting Sword to Heavens 0m - 65m)
+	if is_instance_valid(_energy_column_instance):
+		if power_level > 0.30:
+			_energy_column_instance.visible = true
+			var column_growth: float = smoothstep(0.30, 0.65, power_level)
+			
+			# Pre-release inward compression into sword hilt (t = 31.5s - 33.5s)
+			var compression: float = 1.0
+			if _sequence_time >= 31.5 and _sequence_time < 33.5:
+				compression = lerpf(1.0, 0.12, (_sequence_time - 31.5) / 2.0)
+			elif _sequence_time >= 33.5:
+				compression = maxf(0.0, 1.0 - (_sequence_time - 33.5) * 2.0)
+			
+			_energy_column_instance.scale = Vector3(
+				lerpf(0.6, 1.1, power_level) * compression,
+				column_growth * (1.0 if _sequence_time < 33.5 else compression),
+				lerpf(0.6, 1.1, power_level) * compression
 			)
-			_player_to_sky_instance.rotate_y(real_delta * lerpf(1.8, 5.0, power_level))
+			_energy_column_instance.rotate_y(real_delta * lerpf(1.5, 4.5, power_level))
+			
+			if _energy_column_mat:
+				_energy_column_mat.set_shader_parameter("flow_speed", lerpf(4.5, 9.5, power_level))
+				_energy_column_mat.set_shader_parameter("lightning_pulse", smoothstep(0.55, 0.95, power_level) * 1.8)
+				_energy_column_mat.set_shader_parameter("vertex_displacement_amount", lerpf(0.22, 0.52, power_level))
+				_energy_column_mat.set_shader_parameter("column_opacity", 0.72 * (1.0 if _sequence_time < 33.5 else compression))
 		else:
-			_player_to_sky_instance.visible = false
+			_energy_column_instance.visible = false
 
 	# Celestial Sky Arcs and Spiral Vortex
 	if is_instance_valid(_sky_celestial_arcs_instance):
@@ -568,21 +593,30 @@ func _update_knight_actions_and_filaments(real_delta: float) -> void:
 	if is_instance_valid(_sky_spiral_instance):
 		_sky_spiral_instance.rotate_y(real_delta * lerpf(0.04, 0.30, power_level))
 
-	# Continuous Sky Vortex Shader Modulations & Atmospheric Deformation
+	# Continuous Sky Vortex Shader Modulations & True Atmospheric Transformation
 	if _sky_vortex_mat:
-		_sky_vortex_mat.set_shader_parameter("vortex_speed", lerpf(0.08, 0.38, power_level))
-		_sky_vortex_mat.set_shader_parameter("storm_intensity", lerpf(0.8, 2.6, power_level))
-		_sky_vortex_mat.set_shader_parameter("lightning_intensity", smoothstep(0.55, 0.95, power_level) * 2.2)
+		_sky_vortex_mat.set_shader_parameter("vortex_speed", lerpf(0.08, 0.42, power_level))
+		_sky_vortex_mat.set_shader_parameter("storm_intensity", lerpf(0.8, 2.8, power_level))
+		_sky_vortex_mat.set_shader_parameter("lightning_intensity", smoothstep(0.50, 0.95, power_level) * 2.5)
 		_sky_vortex_mat.set_shader_parameter("cloud_density", lerpf(0.9, 2.4, power_level))
-		_sky_vortex_mat.set_shader_parameter("central_suction_warp", smoothstep(0.40, 0.98, power_level) * 1.5)
-		_sky_vortex_mat.set_shader_parameter("atmospheric_deformation", smoothstep(0.25, 0.95, power_level) * 1.2)
+		_sky_vortex_mat.set_shader_parameter("central_suction_warp", smoothstep(0.35, 0.95, power_level) * 1.6)
+		_sky_vortex_mat.set_shader_parameter("atmospheric_deformation", smoothstep(0.25, 0.95, power_level) * 1.4)
+		_sky_vortex_mat.set_shader_parameter("daylight_dimming", smoothstep(0.28, 0.85, power_level))
+		
+		var column_illum: float = smoothstep(0.35, 0.85, power_level) * 1.8
+		if _sequence_time >= 33.5:
+			column_illum = maxf(0.0, 1.8 - (_sequence_time - 33.5) * 1.5)
+		_sky_vortex_mat.set_shader_parameter("player_column_illumination", column_illum)
 
 func _update_environment_and_arena(real_delta: float) -> void:
 	# Daylight Weakens, Deep Void Indigo Dominates
 	if _directional_sun and is_instance_valid(_directional_sun):
-		var target_energy = lerpf(_orig_sun_energy, 0.10, power_level)
-		if _sequence_time > 44.0:
-			target_energy = lerpf(0.10, _orig_sun_energy * 0.85, (_sequence_time - 44.0) / 10.0)
+		var target_energy = lerpf(_orig_sun_energy, 0.08, power_level)
+		if _sequence_time >= 31.5 and _sequence_time < 33.5:
+			# Pre-release energy shock / sky darkening
+			target_energy = 0.04
+		elif _sequence_time > 44.0:
+			target_energy = lerpf(0.08, _orig_sun_energy * 0.85, (_sequence_time - 44.0) / 10.0)
 		_directional_sun.light_energy = target_energy
 		_directional_sun.light_color = _orig_sun_color.lerp(Color(0.25, 0.06, 0.55), power_level if _sequence_time <= 44.0 else 0.2)
 
@@ -644,14 +678,36 @@ func _execute_god_tier_release() -> void:
 
 	var ctc: Node = get_node_or_null("/root/CombatTimeController")
 	if ctc and ctc.has_method("trigger_slowmo"):
-		ctc.trigger_slowmo(0.40, 4.5, "ultimate_ascendance")
+		ctc.trigger_slowmo(0.35, 4.0, "ultimate_ascendance")
 
 	if _knight.combat_audio:
 		_knight.combat_audio.play_ultimate_climax()
 
 	var parent_node: Node = _knight.get_parent()
 
-	# 1. CELESTIAL SKY CATACLYSM PROPAGATION (SKY)
+	# 1. MULTI-ELEMENT 0.12s CONTROLLED IMPACT FLASH (Sky + Directional Sun + Local Omni Bounce)
+	if _sky_vortex_mat:
+		_sky_vortex_mat.set_shader_parameter("sky_flash_intensity", 3.8)
+		var tw_sky_flash: Tween = create_tween()
+		tw_sky_flash.tween_property(_sky_vortex_mat, "shader_parameter/sky_flash_intensity", 0.0, 0.18)
+
+	if _directional_sun and is_instance_valid(_directional_sun):
+		var tw_sun: Tween = create_tween()
+		tw_sun.tween_property(_directional_sun, "light_energy", 2.6, 0.06)
+		tw_sun.tween_property(_directional_sun, "light_energy", 0.12, 0.18)
+
+	# Localized omni bounce at sword hilt (bright, short-lived, no flat wash)
+	var sword_flash_light: OmniLight3D = OmniLight3D.new()
+	sword_flash_light.light_color = COLOR_VOID_CORE
+	sword_flash_light.light_energy = 4.8
+	sword_flash_light.omni_range = 14.0
+	_knight.add_child(sword_flash_light)
+	sword_flash_light.position = Vector3(0, 0.8, 0)
+	var tw_flash_omni: Tween = create_tween()
+	tw_flash_omni.tween_property(sword_flash_light, "light_energy", 0.0, 0.14)
+	tw_flash_omni.tween_callback(sword_flash_light.queue_free)
+
+	# 2. CELESTIAL SKY CATACLYSM PROPAGATION (SKY)
 	_spawn_celestial_sky_pillar()
 	if SKY_CATACLYSM_BURST and parent_node:
 		var sky_burst: Node3D = SKY_CATACLYSM_BURST.instantiate() as Node3D
@@ -659,52 +715,45 @@ func _execute_god_tier_release() -> void:
 			_apply_shader_material_to_node(sky_burst, ENERGY_RIBBON_SHADER, {
 				"core_color": COLOR_VOID_CORE,
 				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 3.5,
+				"speed": 4.2,
 				"fresnel_power": 1.6
 			})
 			parent_node.add_child(sky_burst)
 			sky_burst.global_position = _knight.global_position + Vector3(0, 38.0, 0)
 			_temp_vfx_nodes.append(sky_burst)
 			var tw_sky: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw_sky.tween_property(sky_burst, "scale", Vector3(85.0, 1.0, 85.0), 1.6)
+			tw_sky.tween_property(sky_burst, "scale", Vector3(95.0, 1.0, 95.0), 1.8)
 
-	# 2. ATMOSPHERIC PROPAGATION (AIR / DUST / FOG FLASH)
+	# 3. ATMOSPHERIC PRESSURE BLAST WAVE (AIR / DUST / SHOCK FRONT)
 	if ATMOSPHERIC_BLAST_WAVE and parent_node:
 		var air_wave: Node3D = ATMOSPHERIC_BLAST_WAVE.instantiate() as Node3D
 		if air_wave:
-			_apply_shader_material_to_node(air_wave, ENERGY_RIBBON_SHADER, {
-				"core_color": COLOR_VOID_CORE,
-				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 2.8,
-				"fresnel_power": 2.0
+			_apply_shader_material_to_node(air_wave, ATMOSPHERIC_SHOCK_SHADER, {
+				"shock_color": Color(0.85, 0.65, 1.0, 0.8),
+				"highlight_color": COLOR_VOID_CORE,
+				"distortion_intensity": 3.0
 			})
 			parent_node.add_child(air_wave)
 			air_wave.global_position = _knight.global_position + Vector3(0, 1.2, 0)
 			_temp_vfx_nodes.append(air_wave)
 			var tw_air: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw_air.tween_property(air_wave, "scale", Vector3(55.0, 8.0, 55.0), 1.4)
+			tw_air.tween_property(air_wave, "scale", Vector3(65.0, 10.0, 65.0), 1.4)
 
-	# Atmospheric Flash: Sunlight surges white-violet, fog flares
-	if _directional_sun and is_instance_valid(_directional_sun):
-		var tw_sun: Tween = create_tween()
-		tw_sun.tween_property(_directional_sun, "light_energy", 3.2, 0.08)
-		tw_sun.tween_property(_directional_sun, "light_energy", 0.20, 1.2)
-
-	# 3. GROUND PROPAGATION (EARTH FRACTURE & 100M SHOCKWAVE)
+	# 4. GROUND PROPAGATION (EARTH FRACTURE & 100M SHOCKWAVE)
 	if SHOCKWAVE_PRIMARY_SCENE and parent_node:
 		var shockwave: Node3D = SHOCKWAVE_PRIMARY_SCENE.instantiate() as Node3D
 		if shockwave:
 			_apply_shader_material_to_node(shockwave, ENERGY_RIBBON_SHADER, {
 				"core_color": COLOR_VOID_CORE,
 				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 3.0,
+				"speed": 3.2,
 				"fresnel_power": 1.5
 			})
 			parent_node.add_child(shockwave)
 			shockwave.global_position = _knight.global_position
 			_temp_vfx_nodes.append(shockwave)
 			var tw: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw.tween_property(shockwave, "scale", Vector3(60.0, 5.0, 60.0), 1.2)
+			tw.tween_property(shockwave, "scale", Vector3(70.0, 5.0, 70.0), 1.4)
 
 	# Secondary Aftershock Pulse (+8.0s post-release, t = 41.5s)
 	var aftershock_timer: SceneTreeTimer = get_tree().create_timer(8.0, true, false, true)
@@ -724,56 +773,47 @@ func _execute_god_tier_release() -> void:
 				aftershock.global_position = _knight.global_position
 				_temp_vfx_nodes.append(aftershock)
 				var tw2: Tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-				tw2.tween_property(aftershock, "scale", Vector3(80.0, 4.0, 80.0), 1.5)
+				tw2.tween_property(aftershock, "scale", Vector3(85.0, 4.0, 85.0), 1.5)
 	)
 
-## --- SHOCKWAVE IMPACTS ENEMIES (BREATHING ROOM & RAW ENERGY ENTRY) (+35.5s) ---
-func _execute_release_enemy_impact() -> void:
-	_impact_executed = true
-	print("\n=================================================================")
-	print(">>> ULTIMATE SHOCKWAVE ENEMY IMPACT (TARGETS: %d) <<<" % _targets.size())
+## --- SPATIAL CAUSALITY: SHOCKWAVE IMPACTS INDIVIDUAL ENEMY ---
+func _impact_single_enemy(target: PlayerController) -> void:
+	if not is_instance_valid(target) or target.is_dead or _impacted_targets.has(target):
+		return
+	_impacted_targets[target] = true
+	var hp_before: float = target.health_component.current_health if target.health_component else 0.0
+	print(">> [DAMAGE EXECUTION] Target: %s, TARGET_HEALTH_BEFORE: %.1f, ULTIMATE_DAMAGE: 99999.0" % [target.name, hp_before])
+	
+	target.is_blocking = false
+	target.block_active_duration = 999.0
+	if target.health_component:
+		target.health_component.is_invulnerable = false
 
-	for target in _targets:
-		if is_instance_valid(target) and target is PlayerController and not target.is_dead:
-			var hp_before: float = target.health_component.current_health if target.health_component else 0.0
-			print(">> [DAMAGE EXECUTION] Target: %s, TARGET_HEALTH_BEFORE: %.1f, ULTIMATE_DAMAGE: 99999.0" % [target.name, hp_before])
-			
-			target.is_blocking = false
-			target.block_active_duration = 999.0
-			if target.health_component:
-				target.health_component.is_invulnerable = false
+	# Immediate violent recoil from shockwave impact
+	target._play_skeletal_animation("ultimate_enemy_interrupt", 0.04)
 
-			# Violent recoil from shockwave impact
-			target._play_skeletal_animation("ultimate_enemy_interrupt", 0.06)
+	# Single authoritative damage transaction
+	target.take_damage_complex(99999.0, _knight, PlayerController.AttackType.FINISHER, 1000.0)
 
-			# Single authoritative damage transaction
-			target.take_damage_complex(99999.0, _knight, PlayerController.AttackType.FINISHER, 1000.0)
+	var hp_after: float = target.health_component.current_health if target.health_component else 0.0
+	print(">> [DAMAGE RESULT] Target: %s, TARGET_HEALTH_AFTER: %.1f, DEATH_TRIGGERED: %s, DIED_SIGNAL_EMITTED: true, WAVE_MANAGER_REGISTERED: true" % [
+		target.name,
+		hp_after,
+		str(target.is_dead)
+	])
 
-			var hp_after: float = target.health_component.current_health if target.health_component else 0.0
-			print(">> [DAMAGE RESULT] Target: %s, TARGET_HEALTH_AFTER: %.1f, DEATH_TRIGGERED: %s, DIED_SIGNAL_EMITTED: true, WAVE_MANAGER_REGISTERED: true" % [
-				target.name,
-				hp_after,
-				str(target.is_dead)
-			])
-	print("=================================================================\n")
+	# Seamlessly and immediately transition into vaporization pipeline
+	target._play_skeletal_animation("ultimate_enemy_dissolve", 0.15)
+	_trigger_enemy_material_breakdown(target)
 
-## --- POST-RELEASE VAPORIZATION SCENE (CLOSE-UP PAYOFF) (+37.5s) ---
-func _trigger_all_enemy_vaporization() -> void:
-	_vaporization_triggered = true
-	print(">>> TRIGGERING POST-RELEASE ENEMY VAPORIZATION SEQUENCE <<<")
-	for target in _targets:
-		if is_instance_valid(target) and target is PlayerController:
-			target._play_skeletal_animation("ultimate_enemy_dissolve", 0.15)
-			_trigger_enemy_material_breakdown(target)
-
-			# Cleanup after complete dissolution
-			var del_timer: SceneTreeTimer = get_tree().create_timer(3.8, true, false, true)
-			var weak_t = weakref(target)
-			del_timer.timeout.connect(func():
-				var ref = weak_t.get_ref()
-				if ref and is_instance_valid(ref) and not ref.is_queued_for_deletion():
-					ref.queue_free()
-			)
+	# Cleanup after dissolution completes
+	var del_timer: SceneTreeTimer = get_tree().create_timer(3.8, true, false, true)
+	var weak_t = weakref(target)
+	del_timer.timeout.connect(func():
+		var ref = weak_t.get_ref()
+		if ref and is_instance_valid(ref) and not ref.is_queued_for_deletion():
+			ref.queue_free()
+	)
 
 func _trigger_enemy_material_breakdown(enemy: PlayerController) -> void:
 	var meshes: Array[Node] = enemy.find_children("*", "MeshInstance3D", true, false)
@@ -794,6 +834,7 @@ func _trigger_enemy_material_breakdown(enemy: PlayerController) -> void:
 			t2.tween_property(d_mat, "shader_parameter/internal_glow", 6.0, 2.5)
 			t2.tween_property(d_mat, "shader_parameter/fracture_amount", 1.0, 2.0)
 			t2.tween_property(d_mat, "shader_parameter/dissolve_amount", 1.0, 2.8).set_delay(0.4)
+
 
 ## --- MYTHIC TYPOGRAPHY OVERLAY ---
 func _setup_mythic_title_canvas() -> void:
@@ -1000,20 +1041,33 @@ func _instantiate_hero_meshes() -> void:
 			_sky_spiral_instance.global_position = _knight.global_position + Vector3(0, -5.0, 0)
 			_temp_vfx_nodes.append(_sky_spiral_instance)
 
-	# 6. Player-to-Sky Ascending Energy Stream (Connecting Sword to Heavens)
-	if PLAYER_TO_SKY_STREAM and parent_node:
-		_player_to_sky_instance = PLAYER_TO_SKY_STREAM.instantiate() as Node3D
-		if _player_to_sky_instance:
-			_apply_shader_material_to_node(_player_to_sky_instance, ENERGY_RIBBON_SHADER, {
-				"core_color": COLOR_VOID_CORE,
-				"edge_color": COLOR_VOID_PRIMARY,
-				"speed": 3.2,
-				"fresnel_power": 1.8
-			})
-			parent_node.add_child(_player_to_sky_instance)
-			_player_to_sky_instance.global_position = _knight.global_position + Vector3(0, 1.2, 0)
-			_player_to_sky_instance.visible = false
-			_temp_vfx_nodes.append(_player_to_sky_instance)
+	# 6. Breakthrough Living Plasma Energy Column (Connecting Sword to Heavens 0m - 65m)
+	if CATACLYSM_ENERGY_COLUMN and parent_node:
+		_energy_column_instance = CATACLYSM_ENERGY_COLUMN.instantiate() as Node3D
+		if _energy_column_instance:
+			_energy_column_mat = ShaderMaterial.new()
+			_energy_column_mat.shader = DENSE_PLASMA_SHADER
+			_energy_column_mat.set_shader_parameter("core_color", COLOR_VOID_CORE)
+			_energy_column_mat.set_shader_parameter("plasma_mid_color", COLOR_VOID_PRIMARY)
+			_energy_column_mat.set_shader_parameter("plasma_deep_color", Color(0.12, 0.02, 0.22, 0.85))
+			_energy_column_mat.set_shader_parameter("flow_speed", 5.2)
+			_energy_column_mat.set_shader_parameter("turbulence_scale", 2.2)
+			_energy_column_mat.set_shader_parameter("vertex_displacement_amount", 0.35)
+			_energy_column_mat.set_shader_parameter("core_glow_intensity", 4.8)
+			_energy_column_mat.set_shader_parameter("column_opacity", 0.72)
+			
+			var col_meshes: Array[Node] = _energy_column_instance.find_children("*", "MeshInstance3D", true, false)
+			if _energy_column_instance is MeshInstance3D:
+				col_meshes.append(_energy_column_instance)
+			for cm in col_meshes:
+				var cmi: MeshInstance3D = cm as MeshInstance3D
+				if cmi:
+					cmi.material_override = _energy_column_mat
+
+			parent_node.add_child(_energy_column_instance)
+			_energy_column_instance.global_position = _knight.global_position
+			_energy_column_instance.visible = false
+			_temp_vfx_nodes.append(_energy_column_instance)
 
 	# 7. Sky Celestial Arcs & Orbital Formations
 	if SKY_CELESTIAL_ARCS and parent_node:
@@ -1028,6 +1082,7 @@ func _instantiate_hero_meshes() -> void:
 			parent_node.add_child(_sky_celestial_arcs_instance)
 			_sky_celestial_arcs_instance.global_position = _knight.global_position
 			_temp_vfx_nodes.append(_sky_celestial_arcs_instance)
+
 
 ## --- INSTANTIATE 10 GPU PARTICLE FAMILIES ---
 func _instantiate_10_particle_families() -> void:

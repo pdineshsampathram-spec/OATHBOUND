@@ -377,6 +377,121 @@ def create_sky_celestial_arcs(path):
     master_arcs.data.materials.append(m)
     export_asset(master_arcs, path)
 
+# --- 5. BREAKTHROUGH LIVING PLASMA COLUMN (CATACLYSM ENERGY COLUMN) ---
+def create_cataclysm_energy_column(path):
+    reset_blend()
+    objs_to_join = []
+
+    # 1. Inner Core Spine (0m to 65m)
+    curve_core = bpy.data.curves.new('CoreSpineCurve', 'CURVE')
+    curve_core.dimensions = '3D'
+    curve_core.bevel_depth = 0.35
+    curve_core.bevel_resolution = 8
+    spline_core = curve_core.splines.new('BEZIER')
+    
+    num_pts = 16
+    spline_core.bezier_points.add(num_pts - 1)
+    for i in range(num_pts):
+        t = i / float(num_pts - 1)
+        z = t * 65.0
+        # Gentle organic wobble along the height
+        x = math.sin(t * 12.0) * (0.2 + t * 0.8)
+        y = math.cos(t * 10.0) * (0.2 + t * 0.8)
+        pt = spline_core.bezier_points[i]
+        pt.co = Vector((x, y, z))
+        pt.handle_left_type = 'AUTO'
+        pt.handle_right_type = 'AUTO'
+        pt.radius = 0.4 + (t * 2.2) # Expands upward into sky canopy
+
+    obj_core = bpy.data.objects.new('EnergyColumn_Core', curve_core)
+    bpy.context.collection.objects.link(obj_core)
+    objs_to_join.append(obj_core)
+
+    # 2. Four Intertwined Turbulent Plasma Lobes
+    for lobe_idx in range(4):
+        curve_lobe = bpy.data.curves.new(f'PlasmaLobeCurve_{lobe_idx}', 'CURVE')
+        curve_lobe.dimensions = '3D'
+        curve_lobe.bevel_depth = 0.22
+        curve_lobe.bevel_resolution = 6
+        spline_lobe = curve_lobe.splines.new('BEZIER')
+        
+        pts_count = 20
+        spline_lobe.bezier_points.add(pts_count - 1)
+        base_angle = (lobe_idx / 4.0) * math.pi * 2.0
+        freq = 1.8 + (lobe_idx * 0.4)
+        
+        for i in range(pts_count):
+            t = i / float(pts_count - 1)
+            z = t * 65.0
+            radius = (0.5 + t * 4.2) * (1.0 + 0.3 * math.sin(t * 14.0 + lobe_idx))
+            ang = base_angle + (t * math.pi * 6.0 * freq)
+            x = math.cos(ang) * radius
+            y = math.sin(ang) * radius
+            pt = spline_lobe.bezier_points[i]
+            pt.co = Vector((x, y, z))
+            pt.handle_left_type = 'AUTO'
+            pt.handle_right_type = 'AUTO'
+            pt.radius = 0.35 + (t * 1.6)
+            
+        obj_lobe = bpy.data.objects.new(f'EnergyColumn_Lobe_{lobe_idx}', curve_lobe)
+        bpy.context.collection.objects.link(obj_lobe)
+        objs_to_join.append(obj_lobe)
+
+    # 3. Internal Lightning Filament Arcs (Zigzagging geometric paths)
+    for lt_idx in range(6):
+        curve_lt = bpy.data.curves.new(f'LightningCurve_{lt_idx}', 'CURVE')
+        curve_lt.dimensions = '3D'
+        curve_lt.bevel_depth = 0.08
+        curve_lt.bevel_resolution = 3
+        spline_lt = curve_lt.splines.new('POLY')
+        
+        num_lt_pts = 24
+        spline_lt.points.add(num_lt_pts - 1)
+        lt_base_ang = (lt_idx / 6.0) * math.pi * 2.0
+        for i in range(num_lt_pts):
+            t = i / float(num_lt_pts - 1)
+            z = t * 65.0
+            r = (0.3 + t * 2.5) + (math.sin(i * 3.7 + lt_idx) * 0.4)
+            ang = lt_base_ang + (t * math.pi * 8.0) + (math.cos(i * 4.1) * 0.5)
+            x = math.cos(ang) * r
+            y = math.sin(ang) * r
+            spline_lt.points[i].co = (x, y, z, 1.0)
+            
+        obj_lt = bpy.data.objects.new(f'EnergyColumn_Lightning_{lt_idx}', curve_lt)
+        bpy.context.collection.objects.link(obj_lt)
+        objs_to_join.append(obj_lt)
+
+    # 4. Outer Atmospheric Dissipation Shroud (Fluted non-uniform envelope)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=1.2, depth=65.0, location=(0, 0, 32.5))
+    shroud_obj = bpy.context.active_object
+    shroud_mesh = shroud_obj.data
+    
+    for v in shroud_mesh.vertices:
+        norm_z = (v.co.z + 32.5) / 65.0 # 0.0 to 1.0
+        r_scale = 0.8 + (norm_z * 7.5) # Expands from 1.0m to 8.5m
+        wobble = 1.0 + (0.25 * math.sin(norm_z * 18.0 + math.atan2(v.co.y, v.co.x) * 3.0))
+        v.co.x *= r_scale * wobble
+        v.co.y *= r_scale * wobble
+
+    objs_to_join.append(shroud_obj)
+
+    # Convert curves to meshes and join into single hero asset
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs_to_join:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs_to_join[0]
+    bpy.ops.object.convert(target='MESH')
+    bpy.ops.object.join()
+    
+    col_obj = bpy.context.active_object
+    col_obj.name = "CataclysmEnergyColumn"
+    col_obj.location = Vector((0, 0, 0))
+    
+    mat = bpy.data.materials.new(name="DensePlasmaColumnMat")
+    col_obj.data.materials.append(mat)
+    
+    export_asset(col_obj, path)
+
 # --- 3. ATMOSPHERIC BLAST WAVE (3D LAYERED SHOCK FRONT) ---
 def create_atmospheric_blast_wave(path):
     reset_blend()
@@ -456,11 +571,13 @@ def main():
     create_fluted_ring("SkyEnergySpiral", 45.0, 3.0, os.path.join(lib_dir, "sky_energy_spiral.glb"))
     create_ground_energy_cracks(os.path.join(lib_dir, "aftershock_energy.glb"))
 
-    # 4. NEW HERO TOUCH-UP ASSETS
+    # 4. NEW HERO TOUCH-UP & BREAKTHROUGH ASSETS
+    create_cataclysm_energy_column(os.path.join(lib_dir, "cataclysm_energy_column.glb"))
     create_player_to_sky_energy_stream(os.path.join(lib_dir, "player_to_sky_energy_stream.glb"))
     create_sky_celestial_arcs(os.path.join(lib_dir, "sky_celestial_arcs.glb"))
     create_atmospheric_blast_wave(os.path.join(lib_dir, "atmospheric_blast_wave.glb"))
     create_sky_cataclysm_burst(os.path.join(lib_dir, "sky_cataclysm_burst.glb"))
+
 
     # Also keep vfx dir aliases in sync
     export_asset(make_fine_energy_filaments("AuraSpiralRibbonsMesh", 4, 0.35, 2.2, 2.8), os.path.join(vfx_dir, "aura_ribbon_mesh.glb"))
