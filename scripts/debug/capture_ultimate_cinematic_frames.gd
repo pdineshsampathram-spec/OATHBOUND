@@ -19,7 +19,7 @@ extends SceneTree
 var test_scene: Node3D = null
 var knight: PlayerController = null
 var director: Node = null
-var output_dir: String = "/Users/ramteja/.gemini/antigravity-ide/brain/db078232-4075-4906-afa0-98e89787b4ad/screenshots"
+var output_dir: String = "/Users/ramteja/.gemini/antigravity-ide/brain/16961b01-0cb3-40eb-85bc-61ccc584dc3a/screenshots"
 var docs_dir: String = "/Users/ramteja/Documents/Blender exp game/docs/screenshots"
 
 var capture_schedule: Array[Dictionary] = [
@@ -38,10 +38,10 @@ var capture_schedule: Array[Dictionary] = [
 	{ "time": 36.2, "name": "13_shockwave_hits_enemies_recoil.png", "desc": "Shockwave Hits Enemies: Recoil & Raw Armor Illumination" },
 	{ "time": 39.0, "name": "14_dedicated_enemy_vaporization.png", "desc": "Dedicated Post-Release Vaporization: Fracturing Dissolution" },
 	{ "time": 41.8, "name": "15_vapor_suction_knight_aura.png", "desc": "Enemy Vapor Suction into Knight Aura" },
-	{ "time": 43.2, "name": "16_secondary_aftershock_pulse.png", "desc": "Secondary Aftershock Pulse Through Arena" },
-	{ "time": 45.0, "name": "17_scarred_sky_aftermath.png", "desc": "Scarred Sky Aftermath & Slowly Rotating Vortex" },
-	{ "time": 47.0, "name": "18_knight_aftermath_clean_rim_light.png", "desc": "Knight Aftermath: Sword Lowered & Clean Rim Lighting" },
-	{ "time": 51.5, "name": "19_cataclysm_mythic_title.png", "desc": "Dedicated Mythic Title: CATACLYSM OF THE SEVENTH OATH" },
+	{ "time": 44.8, "name": "16_secondary_aftershock_pulse.png", "desc": "Secondary Aftershock Pulse Through Arena" },
+	{ "time": 47.5, "name": "17_scarred_sky_aftermath.png", "desc": "Scarred Sky Aftermath & Slowly Rotating Vortex" },
+	{ "time": 50.0, "name": "18_knight_aftermath_clean_rim_light.png", "desc": "Knight Aftermath: Sword Lowered & Clean Rim Lighting" },
+	{ "time": 51.8, "name": "19_cataclysm_mythic_title.png", "desc": "Dedicated Mythic Title: CATACLYSM OF THE SEVENTH OATH" },
 	{ "time": 53.5, "name": "20_player_wins_triumph.png", "desc": "Sequential PLAYER WINS Triumph Beat" }
 ]
 
@@ -98,15 +98,14 @@ func _launch_ultimate() -> void:
 		_finish_captures()
 	)
 
+	process_frame.connect(_on_process_frame)
+
 var is_capturing: bool = false
 
-func _process(delta: float) -> bool:
-	var cur_seq_time: float = elapsed
-	if director and is_instance_valid(director):
-		cur_seq_time = director._sequence_time
-	else:
-		elapsed += delta
-		cur_seq_time = elapsed
+func _on_process_frame() -> void:
+	if not director or not is_instance_valid(director):
+		return
+	var cur_seq_time: float = director._sequence_time
 
 	if not is_capturing and current_capture_idx < capture_schedule.size():
 		var target_shot: Dictionary = capture_schedule[current_capture_idx]
@@ -114,14 +113,11 @@ func _process(delta: float) -> bool:
 			is_capturing = true
 			_do_capture(target_shot, cur_seq_time)
 
-	return false
-
 func _do_capture(target_shot: Dictionary, shot_time: float) -> void:
-	await RenderingServer.frame_post_draw
 	var filepath = output_dir + "/" + target_shot["name"]
 	var docs_filepath = docs_dir + "/" + target_shot["name"]
-	var cam = root.get_viewport().get_camera_3d()
-	var img: Image = root.get_viewport().get_texture().get_image()
+	var cam = root.get_camera_3d()
+	var img: Image = root.get_texture().get_image()
 	if img:
 		img.save_png(filepath)
 		DirAccess.make_dir_recursive_absolute(docs_dir)

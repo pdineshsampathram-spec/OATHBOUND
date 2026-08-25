@@ -1,0 +1,265 @@
+[gd_scene load_steps=5 format=3 uid="uid://cx4j8y6p3k2r7"]
+
+[ext_resource type="Script" path="res://scripts/ui/graphics_settings_dialog.gd" id="1_dialog"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_modal_bg"]
+bg_color = Color(0.06, 0.07, 0.09, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.75, 0.65, 0.35, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_size = 12
+shadow_color = Color(0, 0, 0, 0.8)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_header"]
+bg_color = Color(0.1, 0.12, 0.16, 0.8)
+border_width_bottom = 1
+border_color = Color(0.35, 0.3, 0.2, 0.7)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.04, 0.05, 0.07, 0.6)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.25, 0.35, 0.5)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="GraphicsSettingsDialog" type="CanvasLayer"]
+process_mode = 3
+layer = 120
+script = ExtResource("1_dialog")
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dimmer" type="ColorRect" parent="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.65)
+
+[node name="Panel" type="Panel" parent="Control"]
+custom_minimum_size = Vector2(620, 520)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -310.0
+offset_top = -260.0
+offset_right = 310.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal_bg")
+
+[node name="HeaderRow" type="HBoxContainer" parent="Control/Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 44.0
+grow_horizontal = 2
+
+[node name="TitleLabel" type="Label" parent="Control/Panel/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 18
+text = "⚙  GRAPHICS & DISPLAY SETTINGS"
+
+[node name="CloseXButton" type="Button" parent="Control/Panel/HeaderRow"]
+custom_minimum_size = Vector2(32, 28)
+layout_mode = 2
+text = "✕"
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 52.0
+offset_right = -20.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="PresetSectionLabel" type="Label" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.8, 0.9, 1)
+theme_override_font_sizes/font_size = 13
+text = "MASTER QUALITY PRESETS:"
+
+[node name="PresetRow" type="HBoxContainer" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LowButton" type="Button" parent="Control/Panel/VBoxContainer/PresetRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LOW"
+
+[node name="MedButton" type="Button" parent="Control/Panel/VBoxContainer/PresetRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "MEDIUM"
+
+[node name="HighButton" type="Button" parent="Control/Panel/VBoxContainer/PresetRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "HIGH (M1 Target)"
+
+[node name="UltraButton" type="Button" parent="Control/Panel/VBoxContainer/PresetRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ULTRA"
+
+[node name="RecommendationLabel" type="Label" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.75, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+text = "💡 Apple M1 Detected: HIGH preset recommended for locked 60 FPS."
+autowrap_mode = 2
+
+[node name="HSeparator1" type="HSeparator" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="AdvancedLabel" type="Label" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.85, 1)
+theme_override_font_sizes/font_size = 13
+text = "DETAILED QUALITY CONTROLS:"
+
+[node name="GridContainer" type="GridContainer" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="ShadowLabel" type="Label" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+text = "Shadows:"
+
+[node name="ShadowOpt" type="OptionButton" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MsaaLabel" type="Label" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+text = "MSAA (Anti-Aliasing):"
+
+[node name="MsaaOpt" type="OptionButton" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ResScaleLabel" type="Label" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+text = "Resolution Scale:"
+
+[node name="ResScaleOpt" type="OptionButton" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DebrisLabel" type="Label" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+text = "Floating Rubble:"
+
+[node name="DebrisOpt" type="OptionButton" parent="Control/Panel/VBoxContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TogglesRow" type="HBoxContainer" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="BloomCheck" type="CheckBox" parent="Control/Panel/VBoxContainer/TogglesRow"]
+layout_mode = 2
+button_pressed = true
+text = "Bloom & Glow"
+
+[node name="DistortionCheck" type="CheckBox" parent="Control/Panel/VBoxContainer/TogglesRow"]
+layout_mode = 2
+button_pressed = true
+text = "Shockwave Screen Distortion"
+
+[node name="VfxRow" type="HBoxContainer" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="VfxLabel" type="Label" parent="Control/Panel/VBoxContainer/VfxRow"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+text = "VFX & Particle Density:"
+
+[node name="VfxSlider" type="HSlider" parent="Control/Panel/VBoxContainer/VfxRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.05
+value = 0.75
+
+[node name="VfxValLabel" type="Label" parent="Control/Panel/VBoxContainer/VfxRow"]
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "75%"
+
+[node name="HotkeysLabel" type="Label" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.6, 0.7, 1)
+theme_override_font_sizes/font_size = 11
+text = "⚡ Instant Hotkeys: [F5] Low | [F6] Med | [F7] High | [F8] Ultra | [F3] Perf Stats | [F2 / Esc] Toggle Menu"
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="BottomRow" type="HBoxContainer" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ResetButton" type="Button" parent="Control/Panel/VBoxContainer/BottomRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Reset to M1 Recommended"
+
+[node name="ApplyButton" type="Button" parent="Control/Panel/VBoxContainer/BottomRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.85, 0.4, 1)
+text = "Apply Changes"
+
+[node name="CloseButton" type="Button" parent="Control/Panel/VBoxContainer/BottomRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "Close"

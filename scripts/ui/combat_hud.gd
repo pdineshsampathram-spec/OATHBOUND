@@ -19,6 +19,7 @@ extends CanvasLayer
 
 @onready var timer_label: Label = $Control/TopBanner/HBoxContainer/TimerLabel
 @onready var alive_label: Label = $Control/TopBanner/HBoxContainer/AliveLabel
+@onready var settings_btn: Button = $Control/TopBanner/HBoxContainer/SettingsBtn
 @onready var status_banner: Label = $Control/CenterBanner/StatusBanner
 @onready var toast_label: Label = $Control/CenterBanner/ToastLabel
 @onready var results_ui: MatchResultsUI = $MatchResultsUI
@@ -33,6 +34,11 @@ func _ready() -> void:
 	_update_network_status()
 	status_banner.text = ""
 	toast_label.text = ""
+	if settings_btn:
+		settings_btn.pressed.connect(_on_settings_pressed)
+
+func _on_settings_pressed() -> void:
+	GraphicsSettings.open_settings_dialog()
 
 func _process(delta: float) -> void:
 	if _toast_timer > 0.0:

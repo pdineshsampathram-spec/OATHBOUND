@@ -14,6 +14,7 @@ run/max_fps=60
 
 [autoload]
 
+GraphicsManager="*res://scripts/graphics_settings.gd"
 PerformanceOverlay="*res://scenes/debug/performance_overlay.tscn"
 NetworkManager="*res://scripts/networking/network_manager.gd"
 CombatTimeController="*res://scripts/combat/combat_time_controller.gd"

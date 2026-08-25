@@ -1,9 +1,11 @@
 shader_type spatial;
 render_mode cull_front, unshaded, depth_draw_never;
 
-// OATHBOUND Celestial Sky Vortex Shader — Final Touch-Up
+// OATHBOUND Celestial Sky Vortex Shader — Art-First Cinematic Rebuild
 // Multi-layer rotating celestial storm vortex with domain warping, procedural magical lightning filaments,
-// atmospheric depth stratification, and continuous PowerLevel reactivity.
+// atmospheric depth stratification, continuous PowerLevel reactivity, compression pull,
+// eruption bloom, and persistent sky scar for aftermath.
+// PRIMARY sky transformation driver — Blender sky meshes are secondary reinforcement.
 
 uniform vec4 sky_dark_color : source_color = vec4(0.04, 0.01, 0.08, 1.0);
 uniform vec4 sky_indigo_color : source_color = vec4(0.16, 0.03, 0.32, 1.0);
@@ -20,6 +22,16 @@ uniform float atmospheric_deformation : hint_range(0.0, 2.0) = 0.0;
 uniform float player_column_illumination : hint_range(0.0, 2.0) = 0.0;
 uniform float daylight_dimming : hint_range(0.0, 1.0) = 0.0;
 uniform float sky_flash_intensity : hint_range(0.0, 5.0) = 0.0;
+
+// --- New uniforms for art-first cinematic rebuild ---
+// Compression: clouds aggressively pull inward during Phase 7-8
+uniform float compression_pull : hint_range(0.0, 2.0) = 0.0;
+// Eruption: violent radial energy bloom pushes through sky from below during Phase 9
+uniform float eruption_bloom : hint_range(0.0, 3.0) = 0.0;
+// Sky scar: persistent atmospheric wound visible in aftermath
+uniform float sky_scar_intensity : hint_range(0.0, 2.0) = 0.0;
+// Quality scaling: controls FBM octave count (0=LOW/1oct, 3=ULTRA/4oct)
+uniform int quality_level : hint_range(0, 3) = 3;
 
 varying vec3 v_world_pos;
 
@@ -40,9 +52,11 @@ float noise2(vec2 p) {
 }
 
 float fbm(vec2 p) {
+	int octaves = 1 + quality_level;
 	float val = 0.0;
 	float amp = 0.5;
 	for (int i = 0; i < 4; i++) {
+		if (i >= octaves) break;
 		val += amp * noise2(p);
 		p *= 2.15;
 		amp *= 0.48;
@@ -63,18 +77,21 @@ void fragment() {
 	float angle = atan(v_world_pos.x, v_world_pos.z);
 	
 	// Physical atmospheric pull: Clouds stretch and collapse toward central energy column
-	float inward_stretch = 1.0 + (central_suction_warp * (48.0 / (dist_from_center + 3.5)));
-	float arm_twist = (dist_from_center * 0.035) + (central_suction_warp * 1.6);
+	// Enhanced by compression_pull during Phase 7-8 for aggressive inward collapse
+	float total_suction = central_suction_warp + compression_pull * 1.5;
+	float inward_stretch = 1.0 + (total_suction * (48.0 / (dist_from_center + 3.5)));
+	float arm_twist = (dist_from_center * 0.035) + (total_suction * 1.6);
 	
 	vec2 polar_uv = vec2(angle / 6.28318 + 0.5 + arm_twist, (dist_from_center / inward_stretch) * 0.018);
 	polar_uv.x += TIME * vortex_speed;
 	polar_uv.y += TIME * vortex_speed * 0.25;
 	
 	// Dual-octave domain warping for dense cloud turbulence and atmospheric deformation
+	float total_deformation = atmospheric_deformation + compression_pull * 0.8;
 	vec2 warp1 = vec2(fbm(polar_uv * 3.0), fbm(polar_uv * 3.0 + vec2(5.2, 1.3)));
-	vec2 warp2 = vec2(fbm(polar_uv * 6.0 + warp1 * (1.5 + atmospheric_deformation)), fbm(polar_uv * 6.0 - warp1 * (1.5 + atmospheric_deformation)));
+	vec2 warp2 = vec2(fbm(polar_uv * 6.0 + warp1 * (1.5 + total_deformation)), fbm(polar_uv * 6.0 - warp1 * (1.5 + total_deformation)));
 	
-	float clouds1 = fbm((polar_uv + warp2 * (0.4 + atmospheric_deformation * 0.3)) * 4.0);
+	float clouds1 = fbm((polar_uv + warp2 * (0.4 + total_deformation * 0.3)) * 4.0);
 	float clouds2 = fbm((polar_uv * 8.0 - vec2(TIME * vortex_speed * 0.6)) + warp1 * 0.3);
 	float vortex_pattern = clamp((clouds1 * 0.65 + clouds2 * 0.45) * storm_intensity * cloud_density, 0.0, 1.5);
 	
@@ -99,6 +116,28 @@ void fragment() {
 	
 	// Add column back-light and lightning flashes
 	vec3 lit_sky = core_burst + (core_glow_color.rgb * (lightning * 2.5 + column_illum * 1.2));
+	
+	// --- Eruption Bloom: violent radial energy pushes through sky from below ---
+	float eruption_radial = 0.0;
+	if (eruption_bloom > 0.01) {
+		// Energy radiates outward from center, brightening clouds from below
+		float eruption_center_glow = exp(-dist_from_center * 0.03) * eruption_bloom;
+		// Expanding ring of energy
+		float eruption_ring = smoothstep(0.3, 0.6, eruption_bloom) * exp(-pow((dist_from_center - eruption_bloom * 80.0) * 0.05, 2.0));
+		eruption_radial = eruption_center_glow + eruption_ring;
+		lit_sky += core_glow_color.rgb * eruption_radial * 4.0;
+	}
+	
+	// --- Sky Scar: persistent atmospheric wound visible in aftermath ---
+	if (sky_scar_intensity > 0.01) {
+		// Scar follows the vortex center — a tear in the sky that slowly heals
+		float scar_width = exp(-dist_from_center * 0.06) * sky_scar_intensity;
+		float scar_noise = fbm(polar_uv * 8.0 + vec2(TIME * 0.05, 0.0));
+		float scar_pattern = smoothstep(0.4, 0.6, scar_noise) * scar_width;
+		// Scar glows with residual energy — dimmer violet veins
+		vec3 scar_color = mix(cloud_energy_color.rgb * 0.6, core_glow_color.rgb * 0.3, scar_noise);
+		lit_sky += scar_color * scar_pattern * 2.0;
+	}
 	
 	// Cataclysmic Release Sky Flash
 	vec3 final_sky = lit_sky + (core_glow_color.rgb * sky_flash_intensity * 2.2);

@@ -140,6 +140,22 @@ def author_skeletal_actions(armature_obj):
     key_bone(pose, "UpperArm.R", 20, rot_euler=(10,10,-20))
     key_bone(pose, "Hips", 45, loc=(0,-0.06,-0.10), rot_euler=(-10,0,0))
 
+    # 9b. ultimate_enemy_aware (Art-First: Stage 2 — recognizing power)
+    act = bpy.data.actions.new(name="ultimate_enemy_aware")
+    armature_obj.animation_data.action = act
+    # Slow weight shift — subtle recoil, looking around nervously
+    key_bone(pose, "Hips", 0, loc=(0,-0.06,-0.10), rot_euler=(-10,0,0))
+    key_bone(pose, "Head", 0, rot_euler=(5,0,0))
+    for f in [0, 40, 80, 120]:
+        head_turn = 15.0 * math.sin(f * 0.08)
+        sway = 0.01 * math.sin(f * 0.1)
+        key_bone(pose, "Hips", f, loc=(sway,-0.06,-0.10), rot_euler=(-10,0,0))
+        key_bone(pose, "Head", f, rot_euler=(5, head_turn, 0))
+        key_bone(pose, "Spine", f, rot_euler=(-3, head_turn * 0.3, 0))
+        # Slight arm raise — defensive instinct
+        key_bone(pose, "UpperArm.L", f, rot_euler=(-25 - abs(head_turn * 0.5), -10, 15))
+        key_bone(pose, "UpperArm.R", f, rot_euler=(-25 - abs(head_turn * 0.5), 10, -15))
+
     # 10. ultimate_enemy_terror
     act = bpy.data.actions.new(name="ultimate_enemy_terror")
     armature_obj.animation_data.action = act
@@ -492,122 +508,6 @@ def create_cataclysm_energy_column(path):
     
     export_asset(col_obj, path)
 
-# --- 6. DETONATION EVENT HERO ASSETS (GROUND BLAST, SKY BLOOM, RADIAL FIREBALL, DEBRIS) ---
-def create_cataclysm_ground_blast(path):
-    reset_blend()
-    objs = []
-    # 1. Jagged Fractured Stone Crust with 24 radial sectors
-    for i in range(24):
-        ang1 = (i / 24.0) * math.pi * 2.0
-        ang2 = ((i + 1) / 24.0) * math.pi * 2.0
-        r_inner = 0.8 + (math.sin(i * 3.7) * 0.3)
-        r_outer = 14.0 + (math.cos(i * 2.3) * 4.5)
-        
-        mesh = bpy.data.meshes.new(f"GroundSlab_{i}")
-        verts = [
-            Vector((math.cos(ang1) * r_inner, math.sin(ang1) * r_inner, 0.02)),
-            Vector((math.cos(ang2) * r_inner, math.sin(ang2) * r_inner, 0.02)),
-            Vector((math.cos(ang2) * r_outer, math.sin(ang2) * r_outer, -0.05 + math.sin(i * 1.5) * 0.15)),
-            Vector((math.cos(ang1) * r_outer, math.sin(ang1) * r_outer, -0.05 + math.cos(i * 1.5) * 0.15))
-        ]
-        faces = [(0, 1, 2, 3)]
-        mesh.from_pydata(verts, [], faces)
-        mesh.update()
-        obj = bpy.data.objects.new(f"GroundSlabObj_{i}", mesh)
-        bpy.context.collection.objects.link(obj)
-        objs.append(obj)
-
-    # 2. Outer Ejected Crater Rubble
-    for j in range(16):
-        r = 6.0 + (j * 0.7)
-        ang = j * 1.618 * math.pi * 2.0
-        bpy.ops.mesh.primitive_cube_add(size=0.6, location=(math.cos(ang) * r, math.sin(ang) * r, 0.15))
-        rubble = bpy.context.active_object
-        rubble.rotation_euler = (math.sin(j), math.cos(j), j * 0.5)
-        rubble.scale = Vector((0.8, 1.2, 0.4))
-        objs.append(rubble)
-
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = objs[0]
-    bpy.ops.object.join()
-    ground_obj = bpy.context.active_object
-    ground_obj.name = "CataclysmGroundBlast"
-    m = bpy.data.materials.new(name="GroundBlastMat")
-    ground_obj.data.materials.append(m)
-    export_asset(ground_obj, path)
-
-def create_cataclysm_sky_bloom(path):
-    reset_blend()
-    objs = []
-    # 8 Irregular Bilateral Stratospheric Expansion Lobes (80m x 80m canopy across Z = 45m to 65m)
-    lobe_configs = [
-        (0.0, 0.0, 52.0, 18.0, 12.0, 7.0),
-        (18.0, 12.0, 56.0, 22.0, 16.0, 9.0),
-        (-22.0, 14.0, 58.0, 24.0, 18.0, 10.0),
-        (-14.0, -20.0, 54.0, 20.0, 15.0, 8.0),
-        (24.0, -16.0, 60.0, 26.0, 20.0, 11.0),
-        (32.0, 8.0, 62.0, 20.0, 14.0, 8.0),
-        (-30.0, -8.0, 64.0, 22.0, 16.0, 9.0),
-        (0.0, 28.0, 59.0, 25.0, 19.0, 10.0)
-    ]
-    for idx, (x, y, z, rx, ry, rz) in enumerate(lobe_configs):
-        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=1.0, location=(x, y, z))
-        lobe = bpy.context.active_object
-        lobe.scale = Vector((rx, ry, rz))
-        bpy.ops.object.transform_apply(scale=True)
-        # Apply fractal organic vertex noise
-        for v in lobe.data.vertices:
-            disp = math.sin(v.co.x * 0.25) * math.cos(v.co.y * 0.25) * math.sin(v.co.z * 0.3) * 2.5
-            v.co += v.normal * disp
-        objs.append(lobe)
-
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = objs[0]
-    bpy.ops.object.join()
-    bloom_obj = bpy.context.active_object
-    bloom_obj.name = "CataclysmSkyBloom"
-    m = bpy.data.materials.new(name="SkyBloomMat")
-    bloom_obj.data.materials.append(m)
-    export_asset(bloom_obj, path)
-
-def create_cataclysm_radial_fireball(path):
-    reset_blend()
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=4, radius=3.5, location=(0, 0, 1.2))
-    fb_obj = bpy.context.active_object
-    # Deform into turbulent expanding plasma shell
-    for v in fb_obj.data.vertices:
-        ang_h = math.atan2(v.co.y, v.co.x)
-        ang_v = math.atan2(v.co.z - 1.2, math.sqrt(v.co.x**2 + v.co.y**2))
-        noise = math.sin(ang_h * 5.0) * math.cos(ang_v * 4.0) * 0.8
-        v.co += v.normal * noise
-    fb_obj.name = "CataclysmRadialFireball"
-    m = bpy.data.materials.new(name="RadialFireballMat")
-    fb_obj.data.materials.append(m)
-    export_asset(fb_obj, path)
-
-def create_cataclysm_debris_cluster(path):
-    reset_blend()
-    objs = []
-    for i in range(12):
-        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.35, location=(math.sin(i)*2.0, math.cos(i)*2.0, 0.5))
-        d = bpy.context.active_object
-        d.scale = Vector((0.5 + (i % 3)*0.4, 0.4, 0.8 + (i % 2)*0.5))
-        objs.append(d)
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = objs[0]
-    bpy.ops.object.join()
-    deb_obj = bpy.context.active_object
-    deb_obj.name = "CataclysmDebrisCluster"
-    m = bpy.data.materials.new(name="DebrisClusterMat")
-    deb_obj.data.materials.append(m)
-    export_asset(deb_obj, path)
-
 # --- 3. ATMOSPHERIC BLAST WAVE (3D LAYERED SHOCK FRONT) ---
 def create_atmospheric_blast_wave(path):
     reset_blend()
@@ -657,6 +557,369 @@ def create_sky_cataclysm_burst(path):
     burst_obj.data.materials.append(m)
     export_asset(burst_obj, path)
 
+# --- ART-FIRST HERO ASSETS: RADIAL DETONATION HEMISPHERE ---
+def create_radial_detonation_hemisphere(path):
+    """Hero-quality hemispherical blast wave mesh with irregularity.
+    Non-uniform silhouette via vertex displacement — the shader does the rest."""
+    reset_blend()
+    import random
+    random.seed(42)  # Deterministic irregularity
+
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        segments=48, ring_count=24, radius=1.0, location=(0, 0, 0)
+    )
+    sphere = bpy.context.active_object
+    sphere.name = "RadialDetonationHemisphere"
+
+    # Delete bottom half for hemisphere
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for v in sphere.data.vertices:
+        if v.co.y < -0.05:
+            v.select = True
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.delete(type='VERT')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Irregular silhouette: displace vertices along normals with noise
+    for v in sphere.data.vertices:
+        noise_val = (random.random() - 0.5) * 0.15
+        n = v.normal
+        v.co += Vector((n.x * noise_val, n.y * noise_val * 0.5, n.z * noise_val))
+
+    m = bpy.data.materials.new(name="RadialDetonationMat")
+    sphere.data.materials.append(m)
+    export_asset(sphere, path)
+
+
+# --- ART-FIRST HERO ASSETS: GROUND RUPTURE WITH VERTEX COLORS ---
+def create_ground_rupture_mesh(path):
+    """Ground plane with radial fracture lines encoded in vertex colors.
+    R = crack depth, G = energy intensity, B = crack age (0=center, 1=edge)."""
+    reset_blend()
+    import random
+    random.seed(7)
+
+    bpy.ops.mesh.primitive_plane_add(size=80.0, location=(0, 0.02, 0))
+    plane = bpy.context.active_object
+    plane.name = "GroundRuptureMesh"
+
+    # Subdivide for crack detail
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.subdivide(number_cuts=12)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Add vertex color layer
+    if not plane.data.color_attributes:
+        plane.data.color_attributes.new(name="crack_data", type='FLOAT_COLOR', domain='CORNER')
+
+    color_attr = plane.data.color_attributes["crack_data"]
+
+    # Encode crack data: vertices near radial lines get high R (depth) and G (energy)
+    # B encodes distance from center (age/propagation order)
+    for poly in plane.data.polygons:
+        for loop_idx in poly.loop_indices:
+            vert_idx = plane.data.loops[loop_idx].vertex_index
+            co = plane.data.vertices[vert_idx].co
+            dist = (co.x**2 + co.y**2 + co.z**2)**0.5  # Distance from center
+            norm_dist = min(dist / 40.0, 1.0)  # Normalized 0-1
+
+            # Radial crack lines (8 major cracks)
+            angle = math.atan2(co.z, co.x)
+            crack_proximity = 0.0
+            for i in range(8):
+                crack_angle = i * math.pi / 4.0 + (random.random() - 0.5) * 0.3
+                angular_diff = abs(angle - crack_angle)
+                angular_diff = min(angular_diff, 2 * math.pi - angular_diff)
+                if angular_diff < 0.15:
+                    crack_proximity = max(crack_proximity, 1.0 - angular_diff / 0.15)
+
+            # R: crack depth (high near crack lines)
+            depth = crack_proximity * (1.0 - norm_dist * 0.3)
+            # G: energy intensity (highest near center)
+            energy = crack_proximity * max(0.0, 1.0 - norm_dist * 0.8)
+            # B: crack age (propagation order — center first, edges last)
+            age = norm_dist
+
+            color_attr.data[loop_idx].color = (depth, energy, age, 1.0)
+
+    m = bpy.data.materials.new(name="GroundRuptureMat")
+    plane.data.materials.append(m)
+    export_asset(plane, path)
+
+
+# --- ART-FIRST HERO ASSETS: DEBRIS CLUSTER ---
+def create_hero_debris_cluster(path, count=24):
+    """Irregular rock/stone fragments for anti-gravity floating debris."""
+    reset_blend()
+    import random
+    random.seed(13)
+
+    debris_objs = []
+    for i in range(count):
+        # Random position in a ring around origin
+        angle = random.random() * 2 * math.pi
+        dist = 3.0 + random.random() * 12.0
+        height = random.random() * 0.5
+        x = math.cos(angle) * dist
+        z = math.sin(angle) * dist
+
+        # Random irregular shape
+        bpy.ops.mesh.primitive_cube_add(
+            size=0.15 + random.random() * 0.35,
+            location=(x, height, z)
+        )
+        frag = bpy.context.active_object
+        frag.name = f"Debris_{i}"
+
+        # Randomize shape
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.subdivide(number_cuts=1)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for v in frag.data.vertices:
+            v.co += Vector((
+                (random.random() - 0.5) * 0.08,
+                (random.random() - 0.5) * 0.08,
+                (random.random() - 0.5) * 0.08
+            ))
+
+        # Random rotation
+        frag.rotation_euler = (
+            random.random() * math.pi,
+            random.random() * math.pi,
+            random.random() * math.pi
+        )
+        debris_objs.append(frag)
+
+    # Join all fragments
+    bpy.ops.object.select_all(action='DESELECT')
+    for d in debris_objs:
+        d.select_set(True)
+    bpy.context.view_layer.objects.active = debris_objs[0]
+    bpy.ops.object.join()
+    cluster = debris_objs[0]
+    cluster.name = "HeroDebrisCluster"
+    m = bpy.data.materials.new(name="DebrisMat")
+    cluster.data.materials.append(m)
+    export_asset(cluster, path)
+
+
+# --- ART-FIRST HERO ASSETS: SHORT-LIVED EVENT ASSETS ---
+
+def create_cataclysm_eruption_branching(path):
+    """Hero upward branching plasma eruption (short-lived release event).
+    Shoots from ground y=0m to upper atmosphere y=70m with 6 branching forks."""
+    reset_blend()
+    import random
+    random.seed(99)
+
+    curves = []
+    # Main vertical trunk
+    c = bpy.data.curves.new(name="MainTrunk", type='CURVE')
+    c.dimensions = '3D'
+    c.bevel_depth = 0.45
+    c.bevel_resolution = 4
+    spline = c.splines.new('BEZIER')
+    spline.bezier_points.add(7)
+
+    pts = [
+        (0.0, 0.0, 0.0),
+        (0.2, 0.1, 8.0),
+        (-0.4, 0.3, 18.0),
+        (0.6, -0.2, 30.0),
+        (-0.3, 0.5, 42.0),
+        (0.4, -0.4, 52.0),
+        (0.0, 0.2, 62.0),
+        (0.0, 0.0, 72.0)
+    ]
+    for i, pt in enumerate(pts):
+        spline.bezier_points[i].co = Vector(pt)
+        spline.bezier_points[i].handle_left_type = 'AUTO'
+        spline.bezier_points[i].handle_right_type = 'AUTO'
+        # Taper radius: thick at base, thinner at zenith
+        spline.bezier_points[i].radius = max(0.2, 1.8 - (i * 0.2))
+
+    trunk_obj = bpy.data.objects.new("Trunk", c)
+    bpy.context.scene.collection.objects.link(trunk_obj)
+    curves.append(trunk_obj)
+
+    # 5 Branching diagonal forks
+    for b in range(5):
+        bc = bpy.data.curves.new(name=f"Branch_{b}", type='CURVE')
+        bc.dimensions = '3D'
+        bc.bevel_depth = 0.22
+        bc.bevel_resolution = 3
+        bspline = bc.splines.new('BEZIER')
+        bspline.bezier_points.add(4)
+
+        start_h = 15.0 + b * 9.0
+        angle = b * (2.0 * math.pi / 5.0) + (random.random() - 0.5) * 0.4
+        spread = 6.0 + b * 3.5
+
+        bpts = [
+            (0.0, 0.0, start_h),
+            (math.cos(angle) * spread * 0.3, math.sin(angle) * spread * 0.3, start_h + 5.0),
+            (math.cos(angle) * spread * 0.7, math.sin(angle) * spread * 0.7, start_h + 12.0),
+            (math.cos(angle) * spread, math.sin(angle) * spread, start_h + 20.0),
+            (math.cos(angle) * (spread + 3.0), math.sin(angle) * (spread + 3.0), start_h + 28.0)
+        ]
+        for j, bpt in enumerate(bpts):
+            bspline.bezier_points[j].co = Vector(bpt)
+            bspline.bezier_points[j].handle_left_type = 'AUTO'
+            bspline.bezier_points[j].handle_right_type = 'AUTO'
+            bspline.bezier_points[j].radius = max(0.1, 1.0 - (j * 0.2))
+
+        b_obj = bpy.data.objects.new(f"BranchObj_{b}", bc)
+        bpy.context.scene.collection.objects.link(b_obj)
+        curves.append(b_obj)
+
+    # Convert all curves to mesh and join
+    bpy.ops.object.select_all(action='DESELECT')
+    for co in curves:
+        co.select_set(True)
+    bpy.context.view_layer.objects.active = curves[0]
+    bpy.ops.object.convert(target='MESH')
+    bpy.ops.object.join()
+
+    eruption_obj = bpy.context.active_object
+    eruption_obj.name = "CataclysmEruptionBranching"
+    m = bpy.data.materials.new(name="EruptionMat")
+    eruption_obj.data.materials.append(m)
+    export_asset(eruption_obj, path)
+
+
+def create_sky_cloud_detonation_canopy(path):
+    """Hero-quality irregular upper-atmosphere cloud canopy mesh.
+    120m diameter, 18m thick, irregular billowing lobes for true celestial detonation."""
+    reset_blend()
+    import random
+    random.seed(101)
+
+    lobes = []
+    # Center massive lobe
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=22.0, location=(0, 0, 0))
+    core_lobe = bpy.context.active_object
+    core_lobe.scale = Vector((1.4, 1.4, 0.45))
+    bpy.ops.object.transform_apply(scale=True)
+    lobes.append(core_lobe)
+
+    # 10 Outer billowing cloud lobes at irregular angles and radii
+    for i in range(10):
+        angle = i * (2.0 * math.pi / 10.0) + (random.random() - 0.5) * 0.35
+        r_dist = 28.0 + random.random() * 20.0
+        lobe_r = 10.0 + random.random() * 8.0
+        x = math.cos(angle) * r_dist
+        y = math.sin(angle) * r_dist
+        z = (random.random() - 0.5) * 6.0
+
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=10, radius=lobe_r, location=(x, y, z))
+        lobe = bpy.context.active_object
+        lobe.scale = Vector((1.0 + random.random() * 0.4, 1.0 + random.random() * 0.4, 0.4 + random.random() * 0.3))
+        bpy.ops.object.transform_apply(scale=True)
+        lobes.append(lobe)
+
+    # Join all lobes into single canopy
+    bpy.ops.object.select_all(action='DESELECT')
+    for l in lobes:
+        l.select_set(True)
+    bpy.context.view_layer.objects.active = lobes[0]
+    bpy.ops.object.join()
+    canopy = lobes[0]
+    canopy.name = "SkyCloudDetonationCanopy"
+
+    # Displace vertices with noise for turbulent cloud surface
+    for v in canopy.data.vertices:
+        noise_val = (random.random() - 0.5) * 2.2
+        v.co += Vector((v.normal.x * noise_val, v.normal.y * noise_val, v.normal.z * noise_val * 0.5))
+
+    m = bpy.data.materials.new(name="SkyCloudCanopyMat")
+    canopy.data.materials.append(m)
+    export_asset(canopy, path)
+
+
+def create_epicenter_ground_crater(path):
+    """Epicenter ground crater with radial fault lines, stepped stone slabs, and displaced rock."""
+    reset_blend()
+    import random
+    random.seed(55)
+
+    # Base crater circle with radial displacement
+    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=12.0, depth=0.4, location=(0, 0, 0))
+    crater = bpy.context.active_object
+    crater.name = "EpicenterGroundCrater"
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.subdivide(number_cuts=4)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    for v in crater.data.vertices:
+        d = (v.co.x**2 + v.co.y**2)**0.5
+        norm_d = min(1.0, d / 12.0)
+        # Deep center depression with raised rim
+        if norm_d < 0.6:
+            v.co.z -= (1.0 - norm_d / 0.6) * 0.65
+        else:
+            # Uplifted jagged rim
+            v.co.z += (1.0 - abs(norm_d - 0.75) / 0.25) * 0.35 + (random.random() - 0.5) * 0.15
+
+    m = bpy.data.materials.new(name="CraterMat")
+    crater.data.materials.append(m)
+    export_asset(crater, path)
+
+
+def create_floating_arena_rubble(path, count=36):
+    """Anti-gravity suspended stone fragments and arena pavers scattered in 6m-30m radius."""
+    reset_blend()
+    import random
+    random.seed(88)
+
+    frags = []
+    for i in range(count):
+        angle = random.random() * 2.0 * math.pi
+        dist = 5.0 + random.random() * 25.0
+        height = 0.3 + random.random() * 5.5
+        x = math.cos(angle) * dist
+        y = math.sin(angle) * dist
+
+        size = 0.2 + random.random() * 0.65
+        bpy.ops.mesh.primitive_cube_add(size=size, location=(x, y, height))
+        frag = bpy.context.active_object
+        frag.rotation_euler = (random.random() * math.pi, random.random() * math.pi, random.random() * math.pi)
+        frags.append(frag)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for f in frags:
+        f.select_set(True)
+    bpy.context.view_layer.objects.active = frags[0]
+    bpy.ops.object.join()
+    rubble = frags[0]
+    rubble.name = "FloatingArenaRubble"
+    m = bpy.data.materials.new(name="RubbleMat")
+    rubble.data.materials.append(m)
+    export_asset(rubble, path)
+
+
+def create_radial_shock_front_3d(path):
+    """Multi-layered 3D expanding blast wave geometry with turbulent perimeter."""
+    reset_blend()
+    import random
+    random.seed(44)
+
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=1.0, location=(0, 0, 0))
+    shock = bpy.context.active_object
+    shock.name = "RadialShockFront3D"
+    shock.scale = Vector((1.0, 1.0, 0.75))
+    bpy.ops.object.transform_apply(scale=True)
+
+    for v in shock.data.vertices:
+        noise_val = (random.random() - 0.5) * 0.12
+        v.co += v.normal * noise_val
+
+    m = bpy.data.materials.new(name="RadialShockFrontMat")
+    shock.data.materials.append(m)
+    export_asset(shock, path)
+
 
 def main():
     project_root = "/Users/ramteja/Documents/Blender exp game"
@@ -694,20 +957,25 @@ def main():
     create_sky_celestial_arcs(os.path.join(lib_dir, "sky_celestial_arcs.glb"))
     create_atmospheric_blast_wave(os.path.join(lib_dir, "atmospheric_blast_wave.glb"))
     create_sky_cataclysm_burst(os.path.join(lib_dir, "sky_cataclysm_burst.glb"))
-    
-    # 5. DETONATION EVENT HERO ASSETS (GROUND BLAST, SKY BLOOM, RADIAL FIREBALL, DEBRIS)
-    create_cataclysm_ground_blast(os.path.join(lib_dir, "cataclysm_ground_blast.glb"))
-    create_cataclysm_sky_bloom(os.path.join(lib_dir, "cataclysm_sky_bloom.glb"))
-    create_cataclysm_radial_fireball(os.path.join(lib_dir, "cataclysm_radial_fireball.glb"))
-    create_cataclysm_debris_cluster(os.path.join(lib_dir, "cataclysm_debris_cluster.glb"))
 
+    # 5. ART-FIRST CINEMATIC REBUILD — NEW HERO ASSETS
+    create_radial_detonation_hemisphere(os.path.join(lib_dir, "radial_detonation_hemisphere.glb"))
+    create_ground_rupture_mesh(os.path.join(lib_dir, "ground_rupture_mesh.glb"))
+    create_hero_debris_cluster(os.path.join(lib_dir, "hero_debris_cluster.glb"))
+
+    # 6. SHORT-LIVED EVENT ASSETS (FOR MASSIVE RELEASE & SKY DETONATION)
+    create_cataclysm_eruption_branching(os.path.join(lib_dir, "cataclysm_eruption_branching.glb"))
+    create_sky_cloud_detonation_canopy(os.path.join(lib_dir, "sky_cloud_detonation_canopy.glb"))
+    create_epicenter_ground_crater(os.path.join(lib_dir, "epicenter_ground_crater.glb"))
+    create_floating_arena_rubble(os.path.join(lib_dir, "floating_arena_rubble.glb"))
+    create_radial_shock_front_3d(os.path.join(lib_dir, "radial_shock_front_3d.glb"))
 
     # Also keep vfx dir aliases in sync
     export_asset(make_fine_energy_filaments("AuraSpiralRibbonsMesh", 4, 0.35, 2.2, 2.8), os.path.join(vfx_dir, "aura_ribbon_mesh.glb"))
     create_fluted_ring("ExpandingShockwaveRing", 2.2, 0.08, os.path.join(vfx_dir, "expanding_shockwave_ring.glb"))
     create_fluted_ring("PropagationWaveMesh", 3.5, 0.10, os.path.join(vfx_dir, "propagation_wave_mesh.glb"))
 
-    # Re-export hero_knight.glb with all 14 actions
+    # Re-export hero_knight.glb with all 15 actions (8 knight + 7 enemy)
     knight_glb_path = os.path.join(char_dir, "hero_knight.glb")
     if os.path.exists(knight_glb_path):
         reset_blend()
@@ -725,7 +993,7 @@ def main():
                 export_animations=True,
                 export_anim_single_armature=True
             )
-            print(f">> Successfully exported {knight_glb_path} with all 14 cinematic actions!")
+            print(f">> Successfully exported {knight_glb_path} with all 15 cinematic actions!")
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,8 @@ extends Control
 @onready var name_input: LineEdit = $Panel/MarginContainer/VBoxContainer/NameRow/NameInput
 @onready var char_select: OptionButton = $Panel/MarginContainer/VBoxContainer/CharRow/CharSelect
 @onready var char_info_label: Label = $Panel/MarginContainer/VBoxContainer/CharInfoLabel
+@onready var graphics_select: OptionButton = $Panel/MarginContainer/VBoxContainer/GraphicsRow/GraphicsSelect
+@onready var settings_btn: Button = $Panel/MarginContainer/VBoxContainer/GraphicsRow/SettingsButton
 @onready var ip_input: LineEdit = $Panel/MarginContainer/VBoxContainer/JoinRow/IPInput
 @onready var port_input: LineEdit = $Panel/MarginContainer/VBoxContainer/JoinRow/PortInput
 @onready var host_btn: Button = $Panel/MarginContainer/VBoxContainer/ButtonsRow/HostButton
@@ -25,22 +27,52 @@ func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 	_setup_character_options()
+	_setup_graphics_options()
 
 	host_btn.pressed.connect(_on_host_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	singleplayer_btn.pressed.connect(_on_solo_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
 	char_select.item_selected.connect(_on_char_selected)
+	graphics_select.item_selected.connect(_on_graphics_selected)
+	settings_btn.pressed.connect(_on_settings_pressed)
 
-	NetworkManager.players_updated.connect(_update_player_list)
-	NetworkManager.server_started.connect(_on_server_started)
-	NetworkManager.connected_to_server.connect(_on_connected)
-	NetworkManager.connection_failed.connect(_on_connection_failed)
-	NetworkManager.server_disconnected.connect(_on_server_disconnected)
+	if GraphicsSettings._instance:
+		GraphicsSettings._instance.quality_changed.connect(_on_quality_changed)
+
+	var net: Node = get_node_or_null("/root/NetworkManager")
+	if net:
+		net.players_updated.connect(_update_player_list)
+		net.server_started.connect(_on_server_started)
+		net.connected_to_server.connect(_on_connected)
+		net.connection_failed.connect(_on_connection_failed)
+		net.server_disconnected.connect(_on_server_disconnected)
 
 	start_btn.visible = false
-	status_label.text = "Select fighter archetype, enter name, and join arena."
+	status_label.text = "Select fighter archetype, graphics preset, and join arena."
 	_update_player_list()
+
+func _setup_graphics_options() -> void:
+	graphics_select.clear()
+	graphics_select.add_item("Low (Fastest)", 0)
+	graphics_select.add_item("Medium (Balanced)", 1)
+	graphics_select.add_item("High (Recommended for Apple M1)", 2)
+	graphics_select.add_item("Ultra (Cinematic Quality)", 3)
+	
+	var cur: int = int(GraphicsSettings.ultimate_quality)
+	graphics_select.select(clampi(cur, 0, 3))
+
+func _on_graphics_selected(index: int) -> void:
+	var preset: GraphicsSettings.QualityPreset = GraphicsSettings.preset_from_int(index)
+	GraphicsSettings.apply_preset(preset)
+	GraphicsSettings.show_toast("⚡ Graphics: %s Applied" % GraphicsSettings.preset_name(preset))
+
+func _on_settings_pressed() -> void:
+	GraphicsSettings.open_settings_dialog()
+
+func _on_quality_changed(new_preset: GraphicsSettings.QualityPreset) -> void:
+	if graphics_select:
+		graphics_select.select(clampi(int(new_preset), 0, 3))
 
 func _setup_character_options() -> void:
 	char_select.clear()
@@ -50,19 +82,29 @@ func _setup_character_options() -> void:
 	char_select.select(0)
 	_on_char_selected(0)
 
+func _get_net_mgr() -> Node:
+	return get_node_or_null("/root/NetworkManager")
+
 func _on_char_selected(index: int) -> void:
+	var net: Node = _get_net_mgr()
 	match index:
-		0: NetworkManager.local_character_choice = "Knight"
-		1: NetworkManager.local_character_choice = "Berserker"
-		2: NetworkManager.local_character_choice = "Shadow Warrior"
+		0:
+			if net: net.local_character_choice = "Knight"
+		1:
+			if net: net.local_character_choice = "Berserker"
+		2:
+			if net: net.local_character_choice = "Shadow Warrior"
 
 	if index >= 0 and index < character_descriptions.size():
 		char_info_label.text = character_descriptions[index]
 
 func _on_host_pressed() -> void:
 	_apply_player_settings()
+	var net: Node = _get_net_mgr()
+	if not net:
+		return
 	var port: int = port_input.text.to_int() if port_input.text.is_valid_int() else 9999
-	var err: Error = NetworkManager.host_game(port)
+	var err: Error = net.host_game(port)
 	if err == OK:
 		status_label.text = "Server hosted on port %d. Ready for players..." % port
 		host_btn.disabled = true
@@ -74,6 +116,9 @@ func _on_host_pressed() -> void:
 
 func _on_join_pressed() -> void:
 	_apply_player_settings()
+	var net: Node = _get_net_mgr()
+	if not net:
+		return
 	var ip: String = ip_input.text.strip_edges()
 	if ip.is_empty():
 		ip = "127.0.0.1"
@@ -84,7 +129,7 @@ func _on_join_pressed() -> void:
 	join_btn.disabled = true
 	char_select.disabled = true
 	
-	var err: Error = NetworkManager.join_game(ip, port)
+	var err: Error = net.join_game(ip, port)
 	if err != OK:
 		status_label.text = "Failed to connect: %s" % error_string(err)
 		host_btn.disabled = false
@@ -93,33 +138,40 @@ func _on_join_pressed() -> void:
 
 func _on_solo_pressed() -> void:
 	_apply_player_settings()
-	NetworkManager.players.clear()
-	NetworkManager.players[1] = {
-		"name": NetworkManager.local_player_name,
-		"character": NetworkManager.local_character_choice
-	}
+	var net: Node = _get_net_mgr()
+	if net:
+		net.players.clear()
+		net.players[1] = {
+			"name": net.local_player_name,
+			"character": net.local_character_choice
+		}
 	get_tree().change_scene_to_file("res://scenes/arena/solo_arena.tscn")
 
 func _on_start_pressed() -> void:
-	if multiplayer.is_server():
-		NetworkManager.start_match.rpc()
+	var net: Node = _get_net_mgr()
+	if multiplayer.is_server() and net:
+		net.start_match.rpc()
 
 func _apply_player_settings() -> void:
 	var entered_name: String = name_input.text.strip_edges()
-	if not entered_name.is_empty():
-		NetworkManager.local_player_name = entered_name
+	var net: Node = _get_net_mgr()
+	if not entered_name.is_empty() and net:
+		net.local_player_name = entered_name
 
 func _update_player_list() -> void:
 	if not player_list:
 		return
 	player_list.clear()
-	for p_id in NetworkManager.players.keys():
-		var p_info: Dictionary = NetworkManager.players[p_id]
+	var net: Node = _get_net_mgr()
+	if not net:
+		return
+	for p_id in net.players.keys():
+		var p_info: Dictionary = net.players[p_id]
 		var title: String = "%s [%s] (ID: %d)" % [p_info.get("name", "Player"), p_info.get("character", "Knight"), p_id]
 		player_list.add_item(title)
 
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		var count: int = NetworkManager.players.size()
+		var count: int = net.players.size()
 		start_btn.text = "START MATCH (%d / 5 Players)" % count
 		start_btn.disabled = false
 

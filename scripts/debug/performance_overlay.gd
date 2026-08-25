@@ -52,12 +52,14 @@ func _update_metrics() -> void:
 		status_indicator.color = Color(0.95, 0.2, 0.2, 1.0) # Red (regression / below floor)
 
 	var text: String = ""
+	var cur_preset_name: String = GraphicsSettings.preset_name(GraphicsSettings.ultimate_quality)
 	text += "FPS: %d (%.1f ms)\n" % [int(fps), process_time_ms]
+	text += "Graphics: %s [F5-F8]\n" % [cur_preset_name.to_upper()]
 	text += "Physics: %.1f ms\n" % [physics_time_ms]
 	text += "Draw Calls: %d\n" % [draw_calls]
 	text += "Primitives: %d\n" % [primitives]
 	text += "VRAM: %.1f MB\n" % [video_mem_mb]
 	text += "Objects / Nodes: %d / %d\n" % [objects, nodes]
-	text += "Target Floor: 40 FPS | Cap: 60 FPS"
+	text += "Target: 40+ FPS | [F2] Settings"
 
 	stats_label.text = text

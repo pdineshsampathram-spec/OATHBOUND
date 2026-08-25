@@ -1,10 +1,10 @@
 shader_type spatial;
 render_mode cull_disabled, depth_draw_opaque, blend_mix;
 
-// OATHBOUND Living Plasma Energy Column Shader
+// OATHBOUND Living Plasma Energy Column Shader — Art-First Cinematic Rebuild
 // Renders a dense, supernatural atmospheric energy phenomenon from 0m to 65m+.
 // Semi-transparent dark plasma body, turbulent vertex roil, internal white-violet filaments,
-// and soft atmospheric dissipation without creating an opaque blocking cylinder.
+// soft atmospheric dissipation, and compression mechanics for Phase 7-8.
 
 uniform vec4 core_color : source_color = vec4(0.96, 0.92, 1.0, 1.0);
 uniform vec4 plasma_mid_color : source_color = vec4(0.58, 0.15, 0.95, 1.0);
@@ -17,6 +17,12 @@ uniform float core_glow_intensity : hint_range(1.0, 15.0) = 5.0;
 uniform float column_opacity : hint_range(0.0, 1.0) = 0.72;
 uniform float lightning_pulse : hint_range(0.0, 2.0) = 0.0;
 uniform float vertical_dissipation_power : hint_range(0.1, 4.0) = 1.2;
+
+// --- Art-first cinematic rebuild additions ---
+// Compression: column compresses inward during Phase 7-8 (radius shrinks, density intensifies)
+uniform float compression_factor : hint_range(0.0, 1.0) = 0.0;
+// Quality scaling: FBM octave count
+uniform int quality_level : hint_range(0, 3) = 3;
 
 varying vec3 v_world_pos;
 varying float v_height_norm;
@@ -38,9 +44,11 @@ float noise3D(vec3 p) {
 }
 
 float fbm3D(vec3 p) {
+	int octaves = 1 + quality_level;
 	float val = 0.0;
 	float amp = 0.5;
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 4; i++) {
+		if (i >= octaves) break;
 		val += amp * noise3D(p);
 		p *= 2.2;
 		amp *= 0.48;
@@ -52,12 +60,21 @@ void vertex() {
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_height_norm = clamp(v_world_pos.y / 65.0, 0.0, 1.0);
 	
+	// Compression: vertices pull inward toward center axis during Phase 7-8
+	if (compression_factor > 0.01) {
+		vec3 toward_axis = vec3(-VERTEX.x, 0.0, -VERTEX.z);
+		float pull_strength = compression_factor * 0.6;
+		VERTEX += toward_axis * pull_strength;
+	}
+	
 	// Living plasma vertex roil & displacement wave
 	vec3 p_disp = v_world_pos * (turbulence_scale * 0.5) + vec3(0.0, -TIME * (flow_speed * 0.8), 0.0);
 	float n_disp = (fbm3D(p_disp) - 0.5) * 2.0;
 	
 	// Displace along normal, scaling with height
-	VERTEX += NORMAL * (n_disp * vertex_displacement_amount * (0.4 + v_height_norm * 0.6));
+	// During compression, displacement becomes more violent (contained energy)
+	float compression_violence = 1.0 + compression_factor * 2.0;
+	VERTEX += NORMAL * (n_disp * vertex_displacement_amount * (0.4 + v_height_norm * 0.6) * compression_violence);
 }
 
 void fragment() {
@@ -70,20 +87,28 @@ void fragment() {
 	float plasma_density = (n1 * 0.6 + n2 * 0.4);
 	
 	// Distance from vertical center axis for radial density
+	// During compression, radial core becomes tighter and denser
 	float dist_from_center = length(v_world_pos.xz);
-	float radial_core = exp(-dist_from_center * (1.2 / (0.6 + v_height_norm * 2.0)));
+	float radial_tightness = 1.2 + compression_factor * 3.0;  // Gets much tighter during compression
+	float radial_core = exp(-dist_from_center * (radial_tightness / (0.6 + v_height_norm * 2.0)));
 	
-	// Internal lightning veins
-	float lightning_vein = smoothstep(0.48, 0.52, n2) * (1.0 + lightning_pulse * 2.0);
+	// Internal lightning veins — more intense during compression (contained energy)
+	float compression_lightning_boost = 1.0 + compression_factor * 4.0;
+	float lightning_vein = smoothstep(0.48, 0.52, n2) * (1.0 + lightning_pulse * 2.0) * compression_lightning_boost;
 	
 	// Multi-tiered color stratification (Dark deep body -> vibrant violet -> bright white-violet core)
+	// During compression, core becomes more intensely bright
+	float compression_glow_boost = 1.0 + compression_factor * 3.0;
 	vec3 base_color = mix(plasma_deep_color.rgb, plasma_mid_color.rgb * 1.8, pow(plasma_density, 1.8));
-	vec3 core_glow = mix(base_color, core_color.rgb * core_glow_intensity, pow(radial_core, 2.2));
+	vec3 core_glow = mix(base_color, core_color.rgb * core_glow_intensity * compression_glow_boost, pow(radial_core, 2.2));
 	vec3 final_color = core_glow + (core_color.rgb * lightning_vein * 3.0);
 	
 	// Fresnel rim to preserve volumetric depth without opaque blocking
 	float fresnel = pow(1.0 - max(0.0, dot(NORMAL, VIEW)), 2.0);
-	float alpha_body = mix(0.25, 0.85, plasma_density * radial_core);
+	
+	// During compression, overall opacity increases (denser contained energy)
+	float compression_opacity_boost = 1.0 + compression_factor * 0.3;
+	float alpha_body = mix(0.25, 0.85, plasma_density * radial_core) * compression_opacity_boost;
 	
 	// Taper at very base (near character) to preserve Knight silhouette readability
 	float base_readability_taper = smoothstep(0.0, 2.5, v_world_pos.y);
