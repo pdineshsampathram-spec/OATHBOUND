@@ -1,0 +1,46 @@
+{
+  "milestone": "ULTIMATE_VISUAL_SHOWCASE_BASELINE",
+  "ultimate_name": "CATACLYSM OF THE SEVENTH OATH",
+  "game_title": "OATHBOUND",
+  "capture_date": "2026-08-25",
+  "engine": "Godot 4.7.2 Forward+ (Metal 3.2)",
+  "hardware": "Apple M1 (8GB Unified RAM)",
+  "capture_preset": "ULTRA",
+  "runtime_preset_recommended": "HIGH",
+  "shadow_atlas_size": 4096,
+  "msaa_level": "4X",
+  "vfx_density": 1.0,
+  "particle_count_multiplier": 1.0,
+  "bloom": true,
+  "shockwave_distortion": true,
+  "format": "Lossless PNG",
+  "shot_count": 14,
+  "measured_performance": {
+    "high_m1_target": {
+      "fps_avg": 59.9,
+      "fps_min": 55.0,
+      "draw_calls_peak": 129,
+      "triangles_peak": 330494,
+      "vram_mb": 412.0
+    },
+    "ultra_benchmark": {
+      "fps_avg": 57.8,
+      "fps_min": 21.0,
+      "draw_calls_peak": 129,
+      "triangles_peak": 331178,
+      "vram_mb": 428.5
+    },
+    "low_floor": {
+      "fps_avg": 58.6,
+      "fps_min": 1.0,
+      "draw_calls_peak": 198,
+      "triangles_peak": 572132,
+      "vram_mb": 310.2
+    }
+  },
+  "storage": {
+    "total_project_gb": 1.2,
+    "hard_cap_gb": 20.0,
+    "headroom_gb": 18.8
+  }
+}
