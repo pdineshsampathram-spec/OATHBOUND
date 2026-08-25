@@ -7,7 +7,7 @@
 
 ## ⚔️ Ultimate Showcase: CATACLYSM OF THE SEVENTH OATH
 
-![World-Ending Detonation](docs/showcase/ultimate/screenshots/07_world_ending_detonation.png)
+![World-Ending Detonation](docs/showcase/ultimate/screenshots/06_release_flash.png)
 
 > *"Calm dominance, gravitational inversion, atmospheric power compression, and world-ending destruction."*
 
